@@ -70,6 +70,7 @@ Fuera de esas paradas, avanzar y reportar en bloques (formato de `go-worker-cont
 | `05_BUGS_AND_FINAL_SOLUTIONS.md` | Errores ya resueltos: qué no repetir |
 | `06_IMPLEMENTATION_PLAN.md` | Ruta recomendada por fases |
 | `07_VALIDATION_CHECKLIST.md` | Verificación por fase |
+| `09_ORDEN_ORIGINAL.md` | Orden original dada al agente anterior (referencia histórica; prevalece esta guía) |
 
 ---
 

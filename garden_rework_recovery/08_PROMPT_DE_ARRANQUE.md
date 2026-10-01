@@ -3,8 +3,7 @@
 Pega en la nueva ventana, **en este orden**:
 
 1. El bloque **"NOTA DE CAMBIOS"** de abajo.
-2. Tu **orden original completa** ("Garden Odyssey — Rework: 160 Parcelas → Jardín de Libre Colocación…").
-3. Los archivos `00` a `07` de esta carpeta.
+2. Los archivos `00` a `07` y `09_ORDEN_ORIGINAL.md` (la orden original ya está guardada ahí, no hace falta volver a pegarla).
 
 ---
 
@@ -14,7 +13,7 @@ Pega en la nueva ventana, **en este orden**:
 Carga los skills `gosa` y `go-worker-contract` antes de comenzar.
 
 A continuación te doy:
-(1) la ORDEN ORIGINAL que le di a otro agente hace unos días, y
+(1) la ORDEN ORIGINAL que le di a otro agente hace unos días (09_ORDEN_ORIGINAL.md), y
 (2) una GUÍA DE PROCESO (archivos 00 a 07) que resume cómo terminó ese desarrollo:
     versiones finales de cada sistema, errores que ya se resolvieron y no deben repetirse,
     optimizaciones, y lo que yo hice a mano en el mapa.
