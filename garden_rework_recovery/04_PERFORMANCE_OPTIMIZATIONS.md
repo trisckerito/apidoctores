@@ -1,85 +1,59 @@
-# 04 — OPTIMIZACIONES DE RENDIMIENTO
+# 04 — OPTIMIZACIONES DE RENDIMIENTO (todas a reaplicar)
 
-> Implementar **directamente la versión final**. Cada optimización tiene cómo verificar que sigue presente.
-> El historial **no registró** ajustes concretos de `CanQuery` / `CanTouch` / `CanCollide` en masa, de frecuencias de UI ni de replicación más allá de lo que se lista aquí. No inventar otros.
+> Regla general acordada: **decoración = `CanQuery = false` y `CastShadow = false`**. Todo lo **interactivo** conserva `CanQuery = true`.
+> **Mantener `CanQuery = true` en:** `GardenFloor`, modelos de plantas (`Plant_*`), pets, NPCs, `EggPlaced`, `RainbowFruitVFX` y cualquier cosa que el jugador deba clickear o que un sistema detecte por raycast. **Antes de aplicar en masa, auditar los raycasts** del juego.
 
----
+## P1 — Eliminar el polling de presencia
+- **Problema:** `PlotPresenceService` hacía un raycast de 700 studs hacia abajo cada 0,12 s por jugador en su `GardenZone` (~66 raycasts/s con 8 jugadores contra 1.280 `BaseSoil`). Era el mayor consumidor de CPU.
+- **Final:** borrado. Plantar y usar tools envían la posición o el `slotId` en el request (por evento).
+- **No volver a hacer:** loops que calculen "dónde está parado el jugador".
 
-## P1 — Eliminar el polling de presencia (`PlotPresenceService`)
+## P2 — Eliminar las 1.280 parcelas
+- **Antes:** `Gardens` con ~20.600 descendientes. **Después:** 1.898 en Garden_001.
+- Mientras existan las parcelas: `BaseSoil.CanQuery = false`.
 
-- **Problema original:** raycast cada **0,12 s** desde la cabeza de cada jugador hacia `BaseSoil`, más `GardenZone` Touched/TouchEnded. Era el **mayor consumidor de CPU del jardín** [CONFIRMADO, orden original].
-- **Qué se hizo:** reemplazo por un modelo basado en eventos. El cliente envía la posición o el `slotId` en el request, y el servidor valida solo cuando hay una acción.
-- **Implementación final:** sin bucles por jugador. `PlantHandler` y `ToolUseHandler` validan en el momento del request (acceso, límites, proximidad, radio).
-- **NO volver a implementar:** ningún `while`/`Heartbeat`/`task.wait(0.12)` que calcule "en qué parcela o planta está el jugador". Nada de `ParcelInteractionService` ni de "active plot".
-- **Dependencias:** SYS-02, SYS-03, SYS-04.
-- **Verificar:** buscar `PlotPresence`, `getActivePlot`, `0.12` y `RaycastParams` en loops del servidor → 0 resultados relevantes.
+## P3 — `CanQuery` / `CastShadow` en el mapa
+- **12.390 partes → `CanQuery = false`.** Principales: ~9.840 `Part` (baldosas/decoración) dentro de `Gardens`, 192 troncos, 192 `Union`, los Water y ~2.018 decoraciones en la raíz de workspace.
+- **2.369 partes → `CastShadow = false`** (incluido `GardenFloor`).
+- Motivo: el cliente hace raycasts del mouse cada frame; menos partes consultables = más FPS. Las sombras cuestan GPU cada frame.
 
-## P2 — Eliminar 160 parcelas por jardín
+## P4 — Clima (`ReplicatedStorage.WeatherParticles`) y efectos dinámicos
+- Plantillas: **213 propiedades** corregidas. Neon Stars (64 partes), auto McLaren, volcán, arcos rainbow y lasers → `CanQuery = false` y `CastShadow = false`. Zonas base (`RainZone`, `CyberpunkZone`…) → `CastShadow = false`.
+- **`EffectSystems`:** 5 sistemas que crean Parts en runtime → ahora nacen con `CanQuery = false` (nombres de los 5 **UNKNOWN**; auditar los `Instance.new("Part")` de los efectos).
+- **Lava (volcán):** ya estaba bien y **no se toca**. Las rocas físicas tienen `CanQuery = false`, **`CanCollide = true`** (necesario: empujan al jugador) y `CastShadow = false`. El efecto de superficie es visual. La detección de golpe usa `Magnitude`, no raycast.
+- `RainbowFruitVFX`: se mantiene `CanQuery = true`.
+- Las partículas (`ParticleEmitter`) de clima solo existen en 2 NPCs → irrelevante.
 
-- **Problema original:** `Garden_001` tenía ~**20.600** instancias (160 `Model` × `BaseSoil` + `PlantPivot` + `InteractionPivot` + decoración).
-- **Qué se hizo:** un solo `GardenFloor` y borrado de la carpeta `Parcels`.
-- **Implementación final:** `Garden_001` ≈ **1.898** instancias [CONFIRMADO].
-- **NO volver a implementar:** slots físicos invisibles, grids de Parts ni "marcadores" por posición posible.
-- **Verificar:** `#Garden_001:GetDescendants()` ≈ 1.898 (orden de magnitud). Ningún `BaseSoil`.
+## P5 — Water: de 96 scripts de servidor a 1 LocalScript
+- Cada `Water` tenía un **Script de servidor** con `TweenService` animando 6 texturas (12 Water × 8 jardines = 96 scripts).
+- **Final:** borrar todos los scripts de dentro de los Water y crear **un único `WaterAnimator` (LocalScript en `StarterPlayerScripts`)** que anime todas las texturas de todos los jardines. Costo de servidor: cero.
 
-## P3 — Radio de sprinkler euclidiano (en lugar de BFS)
+## P6 — Sprinklers: `GiroScript`
+- Heartbeat de rotación en el servidor → **`Script` con `RunContext = Client`** (un LocalScript dentro de workspace no se ejecuta).
 
-- **Problema original:** `ParcelDetector` hacía un BFS sobre posiciones de `BaseSoil` vecinos en grid.
-- **Qué se hizo:** distancia euclidiana XZ sobre la lista de plantas activas del jardín (datos en memoria de `PlantGrowthService`, sin consultar Workspace).
-- **Implementación final:** `dx*dx + dz*dz <= r*r` (sin `sqrt`), iterando solo las plantas **del jardín del sprinkler**.
-- **NO volver a implementar:** `ParcelDetector`, búsquedas espaciales en Workspace (`GetPartBoundsInRadius` sobre todo el jardín) ni BFS por vecinos.
-- **Verificar:** `ParcelDetector` no existe. El código del sprinkler itera los datos de plantas, no instancias.
+## P7 — StarCube
+- `FruitAnimation` (Script de servidor con `Humanoid` + `Animator` + `Motor6D` y un `while true` por cada StarCube) → **borrado**.
+- **`StarCubeAnimator`** (LocalScript, cliente) detecta los modelos con attribute **`DefinitionId == "starcube"`** (**no** por tener Humanoid: otra planta futura con Humanoid se confundiría) y los anima localmente.
+- Para futuras plantas animadas: un `<Nombre>Animator` propio por `DefinitionId`.
 
-## P4 — Validación de colocación sobre datos, no sobre Workspace
+## P-MARK — Scripts "marca" (NO borrar)
+- `NightfallColorAnim` (BT Nightfall Blossom, 11), `AstralVariant` (Astral Banana 4, Astral Galaxy Mushroom 4, Astral Nabo 5, Astral Petunia 3, Astral Red Rose 3) y `RainbowPartsAnim`: son Scripts **deshabilitados** que solo **marcan** qué animar. El que anima es **`NightfallBlossomAnimator`** (cliente).
+- **Deben seguir existiendo y deshabilitados.** Si se borran, se pierde el efecto; si se habilitan, el animador los ignora.
+- Assets nuevos con colores animados: agregar su config en `SIGNAL_CONFIG` de `NightfallBlossomAnimator` + un Script deshabilitado con ese nombre.
 
-- **Problema:** con libre colocación hay que comprobar el radio mínimo de 5 studs y el límite de 200 plantas.
-- **Implementación final** [INFERIDO como buena práctica coherente con P3]: el servidor itera las plantas del jardín en memoria (`PlantGrowthService`), comparando con la distancia al cuadrado. El límite de 200 se comprueba primero (corte barato).
-- **NO hacer:** raycasts o `GetPartBoundsInRadius` para detectar plantas vecinas. Tampoco confiar en una pre-validación del cliente (puede existir como ayuda visual, pero el servidor decide).
-- **Verificar:** la validación vive en el servidor y no consulta Workspace.
+## P8 — Highlight por frame
+- `HighlightSystem/Init` hacía un raycast sin filtro cada frame que el mouse se movía, contra todas las partes con `CanQuery = true` → **desactivado**, y `HighlightBridge` borrado en la limpieza.
 
-## P5 — Consola: no reintroducir la recolección periódica
+## P9 — Sistemas de parcelas en segundo plano
+- Borrados: `PlotPresenceSystem`, `ParcelGameplaySystem` (callbacks de XP), `ParcelGuiBridge` (3 `task.spawn` en loop), `ParcelUnlockHandler`, `ParcelGuiController` y sus GUIs.
 
-- **Problema original:** `GamepadController.collectSoils()` volvía a recolectar todos los `BaseSoil` **cada 5 s**.
-- **Estado final:** consola fuera de alcance (inerte).
-- **NO hacer:** si en el futuro se adapta, no recolectar todas las plantas cada N segundos. Usar `ChildAdded`/`ChildRemoved` de la carpeta de plantas o un evento del servidor.
-- **Verificar:** no hay nuevos loops periódicos en `GamepadController`.
+## P10 — Varios
+- `RagdollTester`: borrado (script de pruebas).
+- `CanBeDropped = false` en todos los Tools (seguridad y basura en workspace).
+- Validaciones de plantado, sprinkler y regadera **sobre los datos en memoria** (`PlantGrowthService`), sin consultar workspace.
+- Cooldowns anti-misclick (0,2 s / 0,1 s) → evitan requests duplicados.
+- Revisado y sin problema: 47 loops por frame (todos legítimos: clima, pets, UI, tools), 17 `while true` en el servidor (schedulers necesarios), 174 RemoteEvents (altos, pero probablemente necesarios).
+- Revisado: `CowRainbowHighlight` (pets) ya es LocalScript. `NightfallColorAnim`/`AstralVariant`/`RainbowPartsAnim` → ver P-MARK.
 
-## P6 — Raycast de cliente filtrado
-
-- [INFERIDO] Al plantar, aceptar solo impactos sobre `GardenFloor` (filtro por instancia o por `CanQuery`). Para tools, aceptar solo modelos `Plant_*`. Excluir siempre el personaje.
-- **NO hacer:** aceptar cualquier Part y luego buscar con `FindFirstAncestor` en bucles grandes.
-- **Verificar:** el `RaycastParams` del `ToolUseController` usa una lista de filtro.
-
-## P7 — Cartel de Garden Level dirigido por eventos
-
-- **Implementación final** [CONFIRMADO]: el cartel "se actualiza en vivo al cosechar". Sin loop de refresco.
-- **NO hacer:** `while true do ... task.wait()` para refrescar el `SurfaceGui`.
-- **Verificar:** la actualización la dispara la cosecha (evento o atributo), no un temporizador.
-
-## P8 — Migración solo una vez
-
-- **Implementación final:** `gardenReworkMigrated = true` en el perfil evita volver a ejecutarla [CONFIRMADO].
-- **NO hacer:** escanear el formato viejo en cada entrada una vez migrado.
-- **Verificar:** con el flag a `true`, `GardenMigration` sale inmediatamente.
-
-## P9 — Locks por slot
-
-- **Implementación final:** locks en `SeedService` con clave `userId:gardenId:slotId` + deduplicación por UUID del item [CONFIRMADO como plan]. Es tanto corrección como rendimiento: evita trabajo duplicado por doble click.
-- **Verificar:** dos requests idénticos simultáneos crean una sola planta.
-
----
-
-### Propiedades físicas
-`CanQuery` / `CanTouch` / `CanCollide` / `Anchored` de objetos concretos: solo constan las de `GardenFloor` (`Anchored = true`, `CanCollide = true`; `CanQuery = true` inferido). Cualquier otra optimización de propiedades: **UNKNOWN**, no aplicar sin evidencia.
-
----
-
-## P10 — Optimizaciones FUERA del rework (mapa, iluminación, clima) — UNKNOWN / REQUIERE VERIFICACIÓN
-
-- **Qué se sabe** [CONFIRMADO por el usuario, sin detalle]: durante el desarrollo se hicieron optimizaciones de lag fuera del alcance del rework. Por ejemplo, Parts con `CastShadow`, `CanQuery`, etc., y ajustes en sistemas de clima.
-- **Qué NO se sabe:** qué objetos exactos, qué propiedades, qué valores, si fueron manuales o por script, y en qué sistemas de clima.
-- **Acción obligatoria de la nueva ventana:**
-  1. En el arranque (checklist `03` §0), **preguntar al usuario** por estas optimizaciones.
-  2. Si la copia DEV (`86748110736040`) sigue existiendo → comparar (solo lectura) las propiedades de rendimiento (`CastShadow`, `CanQuery`, `CanTouch`, `CanCollide`, `Anchored`, iluminación, `Lighting`/clima) entre el DEV y el principal, y presentar las diferencias al usuario **antes** de aplicar nada.
-  3. **No aplicar optimizaciones masivas por cuenta propia** (cambiar `CastShadow`/`CanQuery` en masa puede romper raycasts, el plantado o la estética).
-- **Verificar:** lista de cambios aprobada por el usuario y aplicada. Raycast de plantado y tools sigue funcionando.
+## Verificación
+Contar las partes con `CanQuery` y `CastShadow` antes y después; ningún Script dentro de los Water; `GiroScript.RunContext == Client`; no existe `FruitAnimation` en el StarCube; plantar, tools, huevos, NPCs y pets siguen siendo clickeables.

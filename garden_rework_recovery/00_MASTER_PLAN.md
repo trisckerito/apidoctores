@@ -1,59 +1,65 @@
 # 00 — GUÍA MAESTRA DE PROCESO
-## Garden Odyssey — Rework "160 Parcelas → Jardín de Libre Colocación" + Garden Level / Resonancia
+## Garden Odyssey — Rework "160 Parcelas → Jardín Libre" + Garden Level / Resonancia + Optimizaciones
 
-> **Qué es este paquete:** una **GUÍA DE PROCESO** construida a partir de ~2 días de desarrollo previo con otro agente.
-> Recoge cómo terminó cada sistema (versión final), qué errores se cometieron y cómo se resolvieron, qué optimizaciones quedaron y qué hizo el usuario a mano en el mapa.
+> **Qué es este paquete:** una **guía de proceso** construida a partir de la conversación completa (~2 días) con el agente anterior.
+> En aquel desarrollo todo quedó funcionando en una copia DEV, pero **un cierre forzado de Roblox Studio borró todo el trabajo**.
+> Este paquete permite **rehacerlo yendo directo a la versión final**, sin recorrer los ~30 bugs que ya se resolvieron.
 >
-> **Qué NO es:** no es código. El agente anterior escribía los scripts directamente en Studio, así que el código no quedó en el historial. La nueva ventana **implementa por su cuenta**, usando esta guía como referencia para llegar directo a la versión final sin repetir errores.
+> **No contiene el código fuente**: el agente anterior editaba los scripts directamente en Studio y el código nunca quedó en el chat.
+> Contiene la **especificación final** de cada sistema, valores exactos, decisiones del usuario, bugs ya resueltos y cómo verificar.
 
 ---
 
-## 1. Cambio fundamental respecto a la orden original
+## 1. Cambio fundamental respecto a la orden original (`09_ORDEN_ORIGINAL.md`)
 
 | Orden original | **AHORA (prevalece)** |
 |---|---|
-| Implementar en una **copia DEV**; "no preocuparse por romper el juego en vivo" | Implementar **directamente en el JUEGO PRINCIPAL** (placeId `85407374189603`) |
-| Portar luego manualmente al original | No hay porte: se trabaja en el principal |
+| Trabajar en una copia DEV y portar después | Implementar **directamente en el JUEGO PRINCIPAL** (placeId `85407374189603`) |
+| Radio mínimo entre plantas: 5 studs | **1 stud** (decisión del usuario) |
+| Consola dentro del alcance | **Fuera de alcance** (update aparte al final) |
+| Migración como parche en `PlayerAdded` | **ModuleScript llamado desde `PlantGrowthSystem.Init`** (ver `05` B-MIG) |
+| Sin Garden Level | **Garden Level 1–100 + Resonancia** (reemplaza la XP por parcela) |
+| Sin huevos en el alcance | **Huevos en soportes `EggPlaced`** (rework incluido) |
+| — | **Optimizaciones globales de lag** (CanQuery, CastShadow, clima, agua, StarCube…) |
 
-**Consecuencias obligatorias de trabajar en el juego principal:**
-1. **Antes de empezar**, pedir al usuario que guarde o publique una versión de respaldo. Roblox conserva el historial de versiones del place (Creator Hub → place → Version History), y así siempre se puede volver atrás.
-2. **No publicar** el place hasta terminar y validar todo. Trabajar en Studio, guardar con normalidad y publicar solo con la autorización del usuario.
-3. **Migración y datos reales:** si Studio tiene activado *Enable Studio Access to API Services*, cada Play en Studio usa el **DataStore real**. Por eso:
-   - `GardenMigration` se crea con `ENABLED = false` y solo se activa cuando el usuario lo autorice (ver `06`, fase de migración).
-   - Cualquier Play antes de eso puede leer o guardar los perfiles reales con el código nuevo. **Preguntar al usuario** si quiere desactivar API Services mientras se desarrolla (recomendado) y activarlo solo para la prueba final.
-4. **No borrar las parcelas ni los sistemas viejos** hasta que lo nuevo funcione (la regla original sigue vigente y ahora es más importante).
-5. El juego principal tiene **los jardines originales con sus parcelas** (probablemente `Garden_001`…`Garden_008`). Lo que el usuario hizo en el DEV (suelo, cartel, soportes, etc.) **hay que rehacerlo o traerlo** al principal. Ver `03_WORLD_MANUAL_SETUP.md`.
+**Precauciones obligatorias por trabajar en el juego principal:**
+1. **Antes de tocar nada**, el usuario guarda una copia: *File → Save to File As* (`.rbxl` local) **y** confirma que existe una versión en el historial de versiones del place. Con esto se evita que un cierre forzado de Studio vuelva a destruir el trabajo.
+2. **Guardar a menudo** durante la implementación (*Ctrl+S* / *Save to Roblox*), y nunca editar scripts con el juego en **Play** (los cambios hechos en Play no se guardan).
+3. **No publicar** hasta terminar y validar todo, y solo con la autorización del usuario.
+4. **Datos reales:** con *Enable Studio Access to API Services* activado, cada Play usa el DataStore de producción. `GardenMigration` se crea con **`ENABLED = false`** y solo se activa cuando el usuario lo autorice (Sección 13 de `06`). Preguntar si quiere desactivar API Services mientras se desarrolla.
+5. En el juego principal están **los 8 jardines originales con parcelas**. Toda la parte manual del DEV (estilo del suelo, soportes de huevos, cartel, agua) **hay que rehacerla** (`03`).
 
 ---
 
-## 2. Modo de trabajo: CONTROL TOTAL con puntos de parada fijos
+## 2. Modo de trabajo: CONTROL TOTAL con paradas fijas
 
-La nueva ventana **toma el control de la implementación**:
-- decide el orden fino, los nombres internos y la forma del código, siguiendo `gosa`, `go-worker-contract` y las convenciones del proyecto;
-- puede encadenar fases sin pedir permiso entre cada una;
-- usa `06_IMPLEMENTATION_PLAN.md` como **ruta recomendada** (respeta las dependencias), no como un guion rígido.
+La nueva ventana **toma el control**: decide el orden fino, los nombres internos y la forma del código siguiendo `gosa`, `go-worker-contract` y las convenciones del proyecto. `06_IMPLEMENTATION_PLAN.md` es la **ruta recomendada**, no un guion rígido.
 
 **Paradas OBLIGATORIAS (únicas):**
-1. **Al inicio, antes de tocar nada:** presentar al usuario el **checklist de su parte del mapa** (`03_WORLD_MANUAL_SETUP.md` §0), explicando **qué hizo y cómo lo hizo** en el desarrollo anterior, y preguntar si ya está hecho. Si dice que sí → verificarlo con el MCP. Si dice que no → darle instrucciones.
-2. **Decisiones de gameplay** que no estén en ninguna config (radios de sprinkler, balance de XP, etc.).
-3. **Ambigüedades** marcadas `UNKNOWN / REQUIERE VERIFICACIÓN` que no se resuelvan leyendo el proyecto.
-4. **Acciones destructivas:** borrar parcelas, sistemas o scripts.
-5. **Activar la migración** (`ENABLED = true`) o cualquier prueba que toque datos reales.
+1. **Al inicio:** presentar el checklist de `03_WORLD_MANUAL_SETUP.md` §0 (qué hizo el usuario y **cómo** lo hizo antes) y preguntar si ya está. Si responde que sí → verificar con el MCP. Si responde que no → dar instrucciones.
+2. Cuando una fase necesite un objeto manual que todavía no existe.
+3. **Decisiones de gameplay** que no estén en una config.
+4. **Acciones destructivas** (borrar parcelas, sistemas, scripts u objetos) → confirmar.
+5. **Activar la migración** o cualquier prueba con datos reales.
 6. **Publicar.**
 
-Fuera de esas paradas, avanzar y reportar en bloques (formato de `go-worker-contract`).
+Fuera de esas paradas: avanzar, validar cada fase con `07` y reportar en bloques.
 
 ---
 
-## 3. Reglas que no cambian
+## 3. Reglas de ejecución aprendidas (OBLIGATORIAS — causaron la mitad de los bugs)
 
-1. Cargar los skills **`gosa`** y **`go-worker-contract`** antes de empezar.
-2. **Implementar siempre la versión FINAL** (`02_SYSTEMS.md`), nunca la versión 1 histórica (`05_BUGS_AND_FINAL_SOLUTIONS.md`).
-3. **NO INVENTAR.** Un `UNKNOWN` se resuelve leyendo el proyecto con el MCP o preguntando.
-4. **No sustituir por código lo que el usuario hace a mano** (`03`). Si falta, se le pide.
-5. **Gameplay pertenece al usuario.**
-6. **Consola (`GamepadController`) fuera de alcance**, igual que en el desarrollo anterior.
-7. Validar con `07_VALIDATION_CHECKLIST.md` antes de dar por cerrada una fase.
+1. **Verificar cada edición después de hacerla.** En el desarrollo anterior, varios reemplazos con `gsub` / *MultiEdit* **fallaron en silencio** (saltos de línea dobles, caracteres especiales). Se dieron por hechos y rompieron cosas días después. Después de cada cambio: **releer el fragmento editado** y confirmar que el texto nuevo está.
+2. **Chequeo de sintaxis** (compilar con `loadstring`) de cada script modificado antes de dar por cerrada una tarea. Al final, chequear **todos** los scripts del juego.
+3. **Nunca editar con el juego en Play.** Detener el Play antes de escribir código.
+4. **Al renombrar `plotId` → `slotId`**, buscar **todas** las referencias al nombre viejo en ese scope (varias quedaron como `nil`).
+5. **Prohibido `tonumber()` sobre IDs de planta.** Los `slotId` son UUID string; `tonumber` devuelve `nil`. Fue la causa de al menos 8 bugs.
+6. **Eliminar, no deshabilitar.** El usuario quiere el código muerto **borrado** del DataModel, no con `Disabled = true`. Excepción: los scripts "marca" deshabilitados (`NightfallColorAnim`, `AstralVariant`, `RainbowPartsAnim`) **deben seguir existiendo y deshabilitados** (ver `04` P-MARK).
+7. **Después de borrar algo**, buscar referencias en todos los scripts. Un `pcall(function() return game.ServerScriptService.X end)` **no** protege si el índice falla antes; usar `FindFirstChild`.
+8. **Quitar las trazas de debug** (`print` de diagnóstico) al terminar cada arreglo.
+9. **No duplicar RemoteEvents.** Antes de crear uno, buscar si existe. Al final, revisar que no haya nombres repetidos en `ReplicatedStorage`.
+10. **Remotes que el cliente espera al arrancar** deben existir desde el inicio (creados en Studio o por el servidor antes de que el cliente agote su `WaitForChild`).
+11. **El servidor es autoritativo:** la madurez, la distancia, la posición y el consumo de items los decide el servidor.
 
 ---
 
@@ -61,43 +67,26 @@ Fuera de esas paradas, avanzar y reportar en bloques (formato de `go-worker-cont
 
 | Archivo | Uso |
 |---|---|
-| `08_PROMPT_DE_ARRANQUE.md` | **Cómo entregar el paquete** a la nueva ventana (orden original + nota de cambios) |
-| `00_MASTER_PLAN.md` | Este documento: modo de trabajo y reglas |
-| `01_PROJECT_STATE.md` | Estado final alcanzado en el DEV y auditoría del juego principal |
-| `02_SYSTEMS.md` | Versión final de cada sistema |
-| `03_WORLD_MANUAL_SETUP.md` | **Parte del usuario en el mapa** + checklist de inicio |
-| `04_PERFORMANCE_OPTIMIZATIONS.md` | Optimizaciones a conservar |
-| `05_BUGS_AND_FINAL_SOLUTIONS.md` | Errores ya resueltos: qué no repetir |
-| `06_IMPLEMENTATION_PLAN.md` | Ruta recomendada por fases |
+| `08_PROMPT_DE_ARRANQUE.md` | Cómo entregar el paquete a la nueva ventana |
+| `00_MASTER_PLAN.md` | Este documento |
+| `01_PROJECT_STATE.md` | Estado final alcanzado + qué esperar en el juego principal |
+| `02_SYSTEMS.md` | Núcleo: suelo, plantado, datos, plantas, frutas, timers |
+| `02b_SYSTEMS_TOOLS.md` | Regaderas, sprinklers, pala, trowel, extractor, Plant item, amuletos, cooldowns |
+| `02c_SYSTEMS_EGGS_PETS_LEVEL_MIGRATION.md` | Huevos, pets, Garden Level/Resonancia, migración, limpieza |
+| `03_WORLD_MANUAL_SETUP.md` | Parte manual del usuario + checklist de inicio |
+| `04_PERFORMANCE_OPTIMIZATIONS.md` | Todas las optimizaciones a reaplicar |
+| `05_BUGS_AND_FINAL_SOLUTIONS.md` | Bugs resueltos: qué NO repetir |
+| `06_IMPLEMENTATION_PLAN.md` | Ruta por fases |
 | `07_VALIDATION_CHECKLIST.md` | Verificación por fase |
-| `09_ORDEN_ORIGINAL.md` | Orden original dada al agente anterior (referencia histórica; prevalece esta guía) |
-
----
+| `09_ORDEN_ORIGINAL.md` | Orden original (histórica; prevalece esta guía) |
 
 ## 5. Places
-
 | Place | Dato |
 |---|---|
 | **Juego principal (DESTINO)** | placeId `85407374189603`, Studio ID `cd0b5411-5667-4d94-b775-19170f9f529d` |
-| Copia DEV anterior (solo referencia) | nombre `09282026_3`, placeId `86748110736040` |
+| Copia DEV anterior (perdida) | `09282026_3`, placeId `86748110736040`. Comprobar si alguna versión guardada sobrevivió: si existe, los objetos y scripts pueden **copiarse** desde ahí en lugar de rehacerse |
 
-**Atajo posible:** si la copia DEV sigue existiendo, los objetos que el usuario creó allí (`GardenFloor`, `GardenLevel`, soportes de huevos, carpetas) se pueden **copiar y pegar** entre los dos Studios, y los scripts finales también. Preguntar al usuario si el DEV sigue disponible antes de reconstruir nada desde cero.
-
----
-
-## 6. Glosario
-
-| Término | Significado final |
-|---|---|
-| `GardenFloor` | Part único, plano, grande y anclado por jardín. Attribute `GardenId`. |
-| `slotId` | UUID string generado al plantar. Sustituye a `plotId`. |
-| `plotId` | Clave vieja 1..160. Solo la lee la migración. |
-| Parcela / `BaseSoil` | Sistema viejo. Desaparece. |
-| Garden Level | Nivel 1..100 del jardín. Sube con XP por fruta cosechada. |
-| Resonancia | En nivel 100: pagar 1.000.000 Odyssey Coins → nivel 1 + 1 resonancia (+0,05 % al valor de las frutas por nivel, máx. 50 %). |
-| Migración | `GardenMigration`: convierte las plantas viejas en items, una vez por jugador. |
-
-## 7. Etiquetas
-- **[CONFIRMADO]** — dicho explícitamente en el historial.
+## 6. Etiquetas
+- **[CONFIRMADO]** — dicho explícitamente en la conversación.
 - **[INFERIDO]** — deducido; verificar en el proyecto.
-- **UNKNOWN / REQUIERE VERIFICACIÓN** — no consta. Leer el proyecto o preguntar.
+- **UNKNOWN / REQUIERE VERIFICACIÓN** — no consta; leer el proyecto o preguntar.

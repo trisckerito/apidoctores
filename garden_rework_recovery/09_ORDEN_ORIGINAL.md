@@ -4,7 +4,7 @@
 > **Prevalecen** la "NOTA DE CAMBIOS" de `08_PROMPT_DE_ARRANQUE.md` y la guía `00`–`07`:
 > - Ya **NO** se trabaja en una copia DEV: se implementa en el **juego principal** (ver `00_MASTER_PLAN.md` §1).
 > - La **consola** (`GamepadController`) quedó **fuera de alcance**.
-> - Las reglas finales de la **migración** difieren de las de esta orden (ver `02_SYSTEMS.md` SYS-10). Además, la migración final es un ModuleScript llamado desde `PlantGrowthSystem.Init`, **no** un parche en `PlayerAdded` (ver `05` B2).
+> - Las reglas finales de la **migración** difieren de las de esta orden (ver `02c` MIG-01). Además, la migración final es un ModuleScript llamado desde `PlantGrowthSystem.Init`, **no** un parche en `PlayerAdded` (ver `05` H2).
 > - Durante el desarrollo se añadió **Garden Level + Resonancia** (`02` SYS-09), que no aparece aquí.
 
 ---

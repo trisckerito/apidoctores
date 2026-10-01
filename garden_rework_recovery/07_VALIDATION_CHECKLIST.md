@@ -1,116 +1,58 @@
 # 07 — CHECKLIST DE VALIDACIÓN
 
-> Marcar cada punto al cerrar la sección. Si un punto falla → **no avanzar**, reportarlo.
-> Checks comunes a **todas** las secciones (aplicar siempre):
-> - [ ] Los scripts tocados compilan.
-> - [ ] Output sin errores ni warnings nuevos al iniciar Play.
-> - [ ] Sin referencias rotas (`FindFirstChild`/`WaitForChild` a objetos inexistentes).
-> - [ ] Solo se tocó lo de esta sección.
-> - [ ] No se reintrodujo ningún bug de `05`.
-> - [ ] Recomendado (`gosa`): cerrar y reabrir Studio y hacer un Play limpio.
+**Siempre (en cada fase):** ediciones releídas · scripts compilados · Output sin errores ni warnings nuevos · sin debug prints · sin RemoteEvents duplicados · place guardado · ningún bug de `05` reintroducido.
 
----
+## F0
+- [ ] Place `85407374189603` · respaldo `.rbxl` + versión · checklist `03` §0 respondido · tabla `01` §4 rellenada · nada modificado.
 
-## S0 — Arranque
-- [ ] Studio abierto = juego principal `85407374189603`.
-- [ ] Checklist de `03` §0 presentado y respondido por el usuario.
-- [ ] Respaldo del place confirmado.
-- [ ] Objetos manuales verificados con el MCP (o instrucciones dadas).
-- [ ] Tabla de `01` §4 rellenada con evidencia.
-- [ ] Lista de UNKNOWN resueltos y abiertos entregada.
-- [ ] **Ningún cambio en el proyecto.**
+## F1
+- [ ] `GardenFloor` en cada jardín (Part, Anchored, CanCollide, **CanQuery**, sin sombra, `GardenId`) · el click lo alcanza (no lo tapan los `BaseSoil`).
 
-## S1 — `GardenFloor`
-- [ ] `Garden_001.GardenFloor` existe y es un `Part`.
-- [ ] `Anchored = true`, `CanCollide = true`, `CanQuery = true`.
-- [ ] Attribute `GardenId` = `GardenID` del modelo.
-- [ ] Cubre el área de plantado.
+## F2 — Plantado
+- [ ] Click/tap → la planta aparece en el punto exacto + 28 cubos de tierra · sin teleport, animación ni bloqueo de movimiento.
+- [ ] Rechazos: fuera del suelo · < 1 stud (`too_close`) · 201 plantas · > 30 studs · jardín ajeno.
+- [ ] Sin confirmación por rareza; sin `confirm_replace`.
+- [ ] Datos: `plants[slotId]` con `x/z/localX/localZ`.
+- [ ] Rejoin en el **mismo** jardín y en **otro** jardín → misma posición relativa (con `GardenService` forzado temporalmente o con 2 clientes).
+- [ ] Planta apoyada en el suelo · modelo `Plant_g:slot` con `GardenId/SlotId/DefinitionId` · partes con CanQuery = true.
 
-## S2 — Datos `slotId`
-- [ ] Al plantar, se guarda `plants[slotId] = {definitionId, plantedAt, x, z, properties}`.
-- [ ] `PlantGrowthService` indexa por `gardenId:slotId`.
-- [ ] Rejoin: las plantas reaparecen en la misma X/Z con la misma `yRotation` y el mismo estado de crecimiento.
-- [ ] `restorePlants` ignora entradas de formato viejo sin error.
+## F3 — Frutas
+- [ ] Single-harvest (carrot): timer desde que se planta → exactamente en 0 aparece el prompt de cosecha (sin reconectar).
+- [ ] Multi-harvest: timer de planta → 60 s + timer de fruta → prompt.
+- [ ] Cosechar funciona · rejoin restaura las frutas.
+- [ ] Regadera Cosmic: el timer acelera en vivo, sin congelarse con dos riegos, y el prompt solo aparece cuando el servidor la da por lista.
+- [ ] Un solo timer visible (el más cercano, ≤ 12 studs), responsive en el emulador móvil · la E solo en frutas maduras.
+- [ ] Sin logs de `ParcelGameplayService`.
 
-## S3 — Plantado libre (servidor)
-- [ ] Plantar fuera del `GardenFloor` → rechazado.
-- [ ] Plantar a < 5 studs de otra planta → rechazado.
-- [ ] Planta número 201 → rechazada.
-- [ ] Plantar en el jardín de otro jugador sin acceso → rechazado.
-- [ ] Plantar lejos del jugador (proximidad) → rechazado.
-- [ ] Doble request simultáneo → una sola planta y una sola semilla consumida.
-- [ ] Modelo `Plant_<gardenId>:<slotId>` con attribute `slotId`, apoyado sobre la cara superior de `GardenFloor` (sin hundirse ni flotar).
-- [ ] Plantar un `Plant` item conserva su estado.
-- [ ] Ningún uso de `getActivePlot` en el flujo.
+## F4
+- [ ] Sistemas borrados (no deshabilitados) · plantas y frutas se restauran sin errores · sin `require` rotos.
 
-## S4 — Cliente PC/Mobile (plantado)
-- [ ] PC: click en el suelo → la planta aparece en el punto clickeado.
-- [ ] Mobile (emulador): tap → igual.
-- [ ] El cliente envía `(gardenId, x, z)`. No lee `_PlotId`.
-- [ ] El raycast ignora el personaje y solo acepta `GardenFloor`.
+## F5
+- [ ] Conteos de CanQuery/CastShadow reducidos · plantas, pets, NPCs, `EggPlaced` y `GardenFloor` siguen clickeables · `WaterAnimator` anima · sin scripts en los Water · `GiroScript` RunContext Client gira · StarCube animado por `DefinitionId` · scripts marca intactos y deshabilitados · Tools con `CanBeDropped = false` · lava sigue empujando.
 
-## S5 — Tools, Trowel y VFX
-- [ ] Click sobre una planta con un tool → el servidor recibe el `slotId` correcto.
-- [ ] `DeletePlant`, `ExtractPlant`, `WaterPlant` y `MovePlant` funcionan por `slotId`.
-- [ ] Trowel: mover a un punto libre válido → OK. A < 5 studs → rechazado.
-- [ ] VFX de plantado sin errores (no lee `activeSoil`).
-- [ ] Tool sobre una planta de otro jardín sin acceso → rechazado.
+## F6 — Tools
+- [ ] Regaderas: radios 2,5/3,75/5/6,25 · VFX del tamaño del radio · consume 1 · sin plantas → no consume + aviso · animación del personaje.
+- [ ] Un solo `WaterComplete`.
+- [ ] Sprinklers: en cualquier punto · radios 7/14/21/28 · 300 s · tiers distintos suman · plantar dentro de la zona recibe el efecto · expira y limpia · gira · suena · sin combo secreto ni confirmación.
+- [ ] Pala: 9 studs (horizontal) · 2 s · sin cambios de velocidad.
+- [ ] Trowel: levantar ≤ 9 · colocar en cualquier punto · inválido mantiene la planta · cancelar no consume · rejoin conserva la posición.
+- [ ] Extractor ≤ 9, 0,4 s → inventario · Plant item se planta como semilla conservando el estado.
+- [ ] Cooldown de 0,2 s (varita 0,1 s) · móvil con toque.
 
-## S6 — Sprinkler
-- [ ] Se coloca en un XZ libre.
-- [ ] Afecta exactamente a las plantas dentro del radio circular de su tipo.
-- [ ] Radios provenientes de config o definiciones (no codificados a mano en la lógica).
-- [ ] `ParcelDetector` no se usa.
-- [ ] Sonido sin errores.
+## F7 — Huevos
+- [ ] 14 `EggSlot` únicos · colocar en un soporte elegido · ocupado → aviso · noveno huevo → `garden full` · click en el jardín → aviso "red stands" una vez por intento.
+- [ ] Huevo viejo (por parcela) reubicado con su progreso · crece x4 · prompt en el Attachment del asset · timer y hatch a 9 studs.
+- [ ] Lejos → "Get closer to the egg!" una sola vez · vibración + sonido (solo ≤ 9) · desarme con física + sonido 3D · visible para otros jugadores.
+- [ ] Sweet Egg = 18000.
 
-## S7 — Huevos
-- [ ] Los huevos aparecen en los soportes de `Eggs`.
-- [ ] La incubación se conserva tras reubicarlos o hacer rejoin.
-- [ ] Sweet Egg = valor confirmado por el usuario.
+## F8 — Pets
+- [ ] Sweet Frog/Dog (y Nebula) caminan a la planta, aceleran el timer y la planta queda resaltada 3 s · sonidos de habilidades · Lucky Block en el mismo soporte o el primero libre · Lunaris descuenta.
 
-## S8 — Garden Level + Resonancia
-- [ ] `GardenProgressConfig` existe. MaxLevel = **100**. Curva `6N² + 44`. Coste 1.000.000. Bonus 0,05 %. Tope 50 %.
-- [ ] Cosechar una fruta Common → +1 XP. Una OdysseySecret → +8 XP (según la tabla de rarezas existente).
-- [ ] El cartel muestra el título, "Lv. X", la barra y "a / b EXP", centrados. Se actualiza al cosechar, sin loop.
-- [ ] Un visitante ve el mismo valor.
-- [ ] En el nivel 100: barra dorada y "Lv. 100 MAX". Prompt "Resonate (1,000,000)" visible **solo para el dueño**, HoldDuration 1 s.
-- [ ] Sin dinero suficiente → aviso y no cobra.
-- [ ] Con dinero suficiente → pide confirmación → cobra → nivel 1, 0 XP → título "Garden Level 1".
-- [ ] Una fruta cosechada con resonancia R se vende con +0,05 % × R (tope 50 %). El inventario muestra el precio con bonus.
-- [ ] Persistencia: rejoin conserva nivel, XP y resonancia.
+## F9 — Garden Level
+- [ ] Common +1 … OdysseySecret +8 · curva 6N²+44 · cartel en vivo, igual para los visitantes · Lv. 100 MAX dorado · prompt solo para el dueño, 1 s, confirmación, cobro 1M, nivel 1/0 XP, título "Garden Level N" · sin monedas → aviso · bonus 0,05 %/nivel (tope 50 %) al vender · persiste · `MaxLevel = 100`.
 
-## S9 — Migración
-- [ ] `GardenMigration` es un ModuleScript con `ENABLED = false` hasta S12.
-- [ ] Desactivada: las entradas viejas se ignoran y **no se borran**.
-- [ ] Se llama desde `PlantGrowthSystem.Init` **antes** de `restorePlants`. No es un Script en `PlayerAdded`.
-- [ ] Planta vieja madura y extraíble → `Plant` item con su tamaño, variante y mejoras.
-- [ ] Planta vieja en crecimiento o no extraíble → semilla correcta (no se pierde: B1).
-- [ ] Frutas maduras → inventario.
-- [ ] Inventario lleno → **no** marca `gardenReworkMigrated` y no duplica en el reintento.
-- [ ] Tras completarse: `gardenReworkMigrated = true` y en el siguiente join no vuelve a correr.
-- [ ] Los huevos no se ven afectados.
+## F10–F11
+- [ ] Migración: `ENABLED = false`, ModuleScript llamado antes de `restorePlants`, reglas según MIG-01 · búsqueda de `01` §5 → 0 referencias activas · todos los scripts compilan · Garden_001 ≈ 1.900 descendientes · tutorial apunta al suelo · `GamepadController` intacto.
 
-## S10 — Limpieza
-- [ ] No existen `Parcels`, `BaseSoil`, `PlantPivot` ni `InteractionPivot`.
-- [ ] No existen `PlotSystem`, `HighlightBridge`, `ParcelDetector` ni `canAccessPlot`.
-- [ ] `PlotPresenceService` y `ParcelInteractionService` eliminados (o con una decisión documentada).
-- [ ] Búsqueda de `01` §3.3 → 0 referencias activas (excepto `plotId` dentro de `GardenMigration`).
-- [ ] Tutorial: el beam apunta a `GardenFloor`.
-- [ ] Sweet Frog y sonido de sprinklers sin errores.
-- [ ] `GamepadController` intacto (inerte, sin errores).
-- [ ] Todos los scripts compilan. `Garden_001` ≈ 1.898 instancias.
-
-## S11 — Multi-jardín
-- [ ] Cada `Garden_00k` tiene un nombre único, `GardenID = k` y `GardenFloor.GardenId = k`.
-- [ ] Cada uno contiene `GardenFloor`, `Eggs`, `Sprinklers` y `GardenLevel`.
-- [ ] Max Players = número de jardines.
-- [ ] Con 2+ jugadores: cada uno recibe su jardín y planta solo en el suyo.
-- [ ] Valores de prueba revisados (MaxLevel, tiempos de crecimiento, Sweet Egg).
-
-## S12 — Activación y prueba con datos reales
-- [ ] El usuario confirmó los riesgos por escrito.
-- [ ] `ENABLED = true` solo después de esa confirmación.
-- [ ] No se publicó sin autorización.
-- [ ] API Services activado. Sin sesión abierta en el juego publicado.
-- [ ] Las plantas viejas llegan al inventario según las reglas.
-- [ ] Flag `gardenReworkMigrated` presente.
+## F12–F13
+- [ ] Clones con IDs únicos y todas sus carpetas · Max Players · valores de producción · migración probada con la cuenta real (plantas → inventario, flag puesto) · publicado solo con autorización.

@@ -1,251 +1,129 @@
-# 02 — SISTEMAS (ESTADO FINAL)
+# 02 — SISTEMAS: NÚCLEO (suelo, plantado, datos, plantas, frutas, timers)
 
-> Cada sistema describe **la versión final a implementar**. La historia solo aparece cuando evita repetir un error.
-> Etiquetas: **[CONFIRMADO]**, **[INFERIDO]**, **UNKNOWN / REQUIERE VERIFICACIÓN** (ver `00_MASTER_PLAN.md` §6).
-> Rutas de scripts: las de la orden original. **Antes de crear algo, buscarlo en el proyecto**; puede existir ya en su versión final.
+> Versión FINAL de cada sistema. Las rutas son las del proyecto. **Antes de crear algo, buscarlo**: puede existir.
+> Tools → `02b`. Huevos, pets, Garden Level, migración y limpieza → `02c`.
 
 ---
 
-## SYS-01 — Modelo de datos de plantas (`slotId`)
+## SYS-01 — GardenFloor
+**Propósito:** superficie única por jardín donde se planta en cualquier punto XZ, y referencia de coordenadas locales.
 
-**Propósito:** persistir las plantas de cada jardín con clave `slotId` (UUID) y posición XZ libre, en lugar de `plotId` 1..160.
+**Cómo se creó (por código, en el DEV)** [CONFIRMADO]:
+- Mismo **CFrame, posición y tamaño que el Part `Water`** del jardín (92×92 studs; hereda la rotación del jardín).
+- `Anchored = true`, `CanCollide = true`, `CanQuery = true`, `CastShadow = false`, attribute `GardenId`.
+- Altura: **cara superior 0,05 studs por encima del tope de los `BaseSoil`** (si queda por debajo, el click golpea el BaseSoil). La primera versión quedó 0,15 por debajo y no se podía clickear.
+- Mientras existan las parcelas: **`CanQuery = false` en todos los `BaseSoil`** (siguen con `CanCollide = true`).
 
-**Estado final:** IMPLEMENTAR la versión del esquema D1 (propuesta del agente aprobada con "puedes continuar").
+**Después, a mano (usuario) en Garden_001:** lo subió un poco, lo rotó unos grados, lo elevó y le cambió color/material/transparencia. El agente copió **color, material y transparencia** de Garden_001 a los demás. Ver `03`.
 
-**Formato VIEJO** [CONFIRMADO, leído por el agente en `PlayerDataService`] — solo lo lee la migración:
-```lua
-plotSlots[slotIdx].gardens["main"].plants[tostring(plotId)] = {
-    definitionId = "...",
-    plantedAt    = os.time(),
-    properties   = plantInstance, -- uuid, growthTierId, yRotation, etc.
-}
-```
+**Es la referencia de coordenadas:** se usa su `CFrame` (no el del Water, que es cosmético) para convertir world↔local.
 
-**Formato FINAL** [INFERIDO: propuesta D1 aceptada; verificar en el proyecto]:
+---
+
+## SYS-02 — Plantado libre (semillas y Plant items)
+
+**Flujo final (PC y móvil):**
+1. Cliente (`ToolSystem.ToolUseController`): `getFloorHit()` hace un raycast con `FilterType.Include` limitado a los `GardenFloor` → obtiene `{floor, position}`. Un toque corto planta; un arrastre mueve la cámara (no planta).
+2. Envía `PlantRequest:FireServer("plant", gardenId, x, z)`.
+3. Servidor (`SeedPlacementSystem.PlantHandler`):
+   - acceso al jardín (`AccessService.canAccessGarden`);
+   - punto dentro de los límites del `GardenFloor` del jardín;
+   - proximidad jugador–punto ≤ **30 studs** (semillas y Plant items por igual);
+   - **separación mínima de 1 stud** con las plantas del jardín (decisión del usuario; error `too_close`);
+   - **máximo 200 plantas** por jardín (`garden_full`);
+   - genera **`slotId` (UUID)** en el servidor;
+   - calcula **`localX`/`localZ`** = `GardenFloor.CFrame:PointToObjectSpace(Vector3.new(x, 0, z))`;
+   - inyecta `{gardenId, slotId, x, z, localX, localZ}` en `ParcelInteractionService._activeSlot[player]` (getter `getActiveSlot(player)`);
+   - semilla → `SeedService.plant()`; Plant item → `PlantFactory.fromExisting()` (conserva tamaño, variante y mejoras).
+4. Respuesta: `PlantResponse:FireClient(player, "planted", worldX, worldZ)`.
+5. `ToolSystem.PlantVFXController`: **28 cubos de tierra** salen disparados desde `(worldX, Y del suelo, worldZ)`.
+
+**Decisiones finales (UX):**
+- **Sin teleport, sin animación del personaje y sin bloqueo de movimiento** (opción "C" elegida por el usuario: solo partículas en el punto plantado).
+- **Sin confirmación por rareza** ("Plant X here?" para Galaxy, Royal, Aurora y OdysseySecret) — eliminada.
+- **Sin reemplazo de planta:** se eliminaron la acción `confirm_replace` y la función `plantReplace` del servidor. El servidor solo acepta `"plant"`.
+- Se eliminó el sync del attribute `HasPlant` en `BaseSoil`.
+
+**`SeedService`** (`SeedSystem`): usa `getActiveSlot` (no `getActivePlot`); todo `plotId` → `slotId`; guarda `x`, `z`, `localX`, `localZ` en el `plantInstance`; locks `userId:gardenId:slotId`; consume con `consumeReferenceGetEntry`; deduplicación por UUID.
+
+**`ParcelInteractionService`:** **se conserva** solo con `_activeSlot` / `getActiveSlot`. Se eliminaron `_activePlot` y su `require` de `PlotPresenceService`.
+
+**`PlantingGuard.isPlanting()`:** se preserva.
+
+---
+
+## SYS-03 — Datos de plantas (`slotId`) y restauración
+**Formato viejo** (solo lo lee la migración): `plotSlots[slotIdx].gardens["main"].plants[tostring(plotId)] = { definitionId, plantedAt, properties = plantInstance }`.
+
+**Formato final** [CONFIRMADO]:
 ```lua
 plotSlots[slotIdx].gardens["main"].plants[slotId] = {
-    definitionId = "avocado",
+    definitionId = "...",
     plantedAt    = os.time(),
-    x            = 10.5,   -- world X
-    z            = -44.2,  -- world Z
-    properties   = plantInstance,
+    properties   = plantInstance, -- incluye uuid, growthTierId, yRotation, x, z, localX, localZ, ...
 }
 ```
+(`x/z/localX/localZ` viven en `properties`/`plantInstance`; leer el código real antes de asumir otra ubicación.)
 
-**Scripts:**
-- `ServerScriptService.PlantGrowthSystem.PlantGrowthService`: es el dueño del estado de todas las plantas. Clave interna **`gardenId:slotId`** (antes `gardenId:plotId`). Métodos existentes: `createPlant`, `plotHasPlant` (adaptar o renombrar según convención; UNKNOWN), `onPlantCreated`, `onPlantRemoved`. Contiene `restorePlants` (carga al entrar el jugador).
-- `ServerScriptService.PlantGrowthSystem.PlantFactory`: crea `PlantInstance`. `create()` genera `yRotation` aleatorio, **se mantiene igual**. `fromExisting()` reconstruye desde el estado guardado y lo usan la migración y los `Plant` items.
-- `PlayerDataService`: persistencia (namespace exacto UNKNOWN; el agente lo encontró bajo `plotSlots`).
+**`PlantGrowthSystem.PlantGrowthService`:**
+- Clave interna `gardenId:slotId` (string). **`_parseKey` NO hace `tonumber`** (devolvía `nil` con UUID y `getGardenPlants` devolvía 0 plantas, lo que rompía la regadera y los sprinklers).
+- `getPlant`, `plotHasPlant`, `getGrowthRate`, `clearGarden`, `getGardenPlants`, `maturePlant` y `createPlant` adaptados a string.
+- `_resolveServices`: **sin** referencias a `ParcelGameplaySystem`.
+- Scheduler de maduración de planta: `TICK_INTERVAL = 5` s (las single-harvest **no** dependen de él; ver SYS-05).
+- **`restorePlants`:**
+  - si la planta tiene `localX/localZ` → `world = GardenFloor(jardín actual).CFrame:PointToWorldSpace(Vector3.new(localX, 0, localZ))`, y actualiza `x/z`;
+  - **auto-reparación:** si no tiene `localX/localZ` pero sí `x/z`, busca en cuál de los jardines cae ese punto, calcula la posición local respecto de ese jardín y la guarda;
+  - **protección:** ignora (sin borrar) las entradas de formato viejo (clave numérica de parcela) → las procesa `GardenMigration`.
+- `GardenService.releasePlayer()` (en `PlayerRemoving`) → `clearGarden(gardenId)`: limpia el runtime, no la persistencia. **Sin cambios** (ya funcionaba).
 
-**Decisiones finales:**
-- `slotId`: UUID string generado **en el servidor** al plantar. [INFERIDO: la orden dice "generado al plantar"; el servidor es autoritativo según `gosa`.]
-- UNKNOWN: ¿el `slotId` coincide con `properties.uuid` del `plantInstance`? D1 decía "la migración convierte `plants[tostring(plotId)]` → `plants[uuid]` (usando el uuid del plantInstance)". Pero la migración final **no reubica plantas**, las convierte en items (ver SYS-10). Verificar en el proyecto.
-- Los locks de `SeedService` pasan de `userId:gardenId:plotId` a **`userId:gardenId:slotId`** [CONFIRMADO como plan].
-
-**Validaciones:** ver `07_VALIDATION_CHECKLIST.md` §S2.
-
----
-
-## SYS-02 — `GardenFloor` y colocación libre (servidor)
-
-**Propósito:** plantar en cualquier punto XZ del suelo del jardín.
-
-**Objetos requeridos (MANUALES, ver `03`):** `GardenFloor` por jardín, con attribute `GardenId`.
-
-**Flujo final (PC/Mobile):**
-1. El cliente hace click/tap → raycast → impacta `GardenFloor` → obtiene `(x, z)` y el `GardenId` del suelo.
-2. El cliente envía **`(gardenId, x, z)`** en lugar de `(gardenId, plotId)`.
-3. Servidor (`PlantHandler` → `SeedService`):
-   - `AccessService.canAccessGarden(player, gardenId)` (ya **no** existe `canAccessPlot`).
-   - Valida que `(x, z)` esté **dentro de los límites del `GardenFloor`** de ese `gardenId` [INFERIDO: necesario para seguridad; implementación UNKNOWN].
-   - Valida la **proximidad** del jugador al punto. Antes era un máximo de 20 studs al `BaseSoil`. Distancia final UNKNOWN; usar 20 si no hay otra, y confirmar con el usuario.
-   - Valida el **radio mínimo de 5 studs** contra todas las plantas activas del jardín, y el **límite de 200 plantas** por jardín (valores de la orden; UNKNOWN si cambiaron, ver `GardenProgressConfig` u otra config).
-   - Genera `slotId`, consume la semilla (`consumeReferenceGetEntry`), crea la planta con `PlantFactory` y la registra en `PlantGrowthService`.
-4. `PlantVisualService` crea el modelo **`Plant_<gardenId>:<slotId>`** en `(x, Ytop(GardenFloor) + offset, z)` con la `yRotation` del `plantInstance`, y le pone el attribute `slotId` [INFERIDO].
-
-**Scripts:**
-- `ServerScriptService.SeedPlacementSystem.PlantHandler`: recibe `PlantRequest`. Antes inyectaba `activePlot` en `ParcelInteractionService` y mantenía `HasPlant` en el `BaseSoil`. **Eso desaparece.** Maneja semillas (`SeedService.plant()`) y `Plant` items (`PlantFactory.fromExisting()`).
-- `ServerScriptService.SeedSystem.SeedService`: deja de llamar `getActivePlot(player)`. Recibe la posición/slot directamente. Conserva los locks y la deduplicación por UUID.
-- `PlantVisualService`: antes usaba `plot.plantPivot`. Ahora posiciona por XZ.
-- `ServerScriptService.AccessSystem.AccessService`: solo `canAccessGarden`.
-- `PlantingGuard.isPlanting()`: **se preserva igual**.
-
-**Bug histórico que NO debe repetirse:** apoyar la planta en la altura de `BaseSoil`. Al subir el usuario el suelo, las plantas quedaron mal posicionadas. **Final: la altura sale del `GardenFloor`** (cara superior: `Position.Y + Size.Y/2`). Ver `05` B3.
-
-**RemoteEvents:** `PlantRequest` (existente). Firma final UNKNOWN: se infiere `(action, gardenId, x, z)`. Verificar en el proyecto antes de cambiar nada.
+**`GardenSystem.GardenService`:** quitar la referencia a `PlotPresenceSystem`. El attribute `GardenID` del modelo es **string** ("1") en el DEV y `_gardenToPlayer` se indexa con ese valor [CONFIRMADO]. Verificar el tipo en el principal y mantener la coherencia.
 
 ---
 
-## SYS-03 — Detección de presencia / plot activo (ELIMINADO → basado en eventos)
-
-**Estado final:** sin polling. El cliente manda la posición (plantar) o el `slotId` (tools) en el propio request, y el servidor valida. No existe "plot activo" por jugador.
-
-**Se elimina:**
-- `ServerScriptService.PlotPresenceSystem.PlotPresenceService` (raycast cada 0,12 s desde la cabeza del jugador + `GardenZone` Touched/TouchEnded).
-- `ServerScriptService.ParcelInteractionSystem.ParcelInteractionService` (`_activePlot[userId]`).
-- **UNKNOWN** si ambos se borraron físicamente en el desarrollo original (no figuran en la lista final de eliminados). Al implementar: eliminar solo en la sección de limpieza, después de comprobar que nadie los referencia.
-
-**Se conserva:** `GardenZone` (zona de entrada de cada jardín) [CONFIRMADO "puede reutilizarse"]. Uso final concreto UNKNOWN.
-
----
-
-## SYS-04 — Tools (servidor)
-
-**Scripts:**
-- `ServerScriptService.ToolUseHandler`: recibe `ToolUseRequest`. Final: **`(gardenId, slotId)`** en lugar de `(gardenId, plotId)`. Ya no inyecta `activePlot`. Valida el acceso al jardín, que el `slotId` exista en ese jardín y la proximidad del jugador a la planta. Resuelve el UUID del item equipado (sin cambios).
-- `ServerScriptService.ToolSystem.ToolActionImplementations`: `PlacePlant`, `DeletePlant`, `ExtractPlant`, `MovePlant`, `WaterPlant` y `PlaceSprinkler` reciben un destino nuevo en lugar de `plot = {gardenId, plotId}`:
-  - Acciones sobre una planta existente → `{ gardenId, slotId }`.
-  - Acciones que colocan algo nuevo (`PlacePlant`, `MovePlant` destino, `PlaceSprinkler`) → `{ gardenId, x, z }`, con la misma validación que SYS-02.
-  - UNKNOWN: la forma exacta de la tabla. Leer el proyecto.
+## SYS-04 — Visual de plantas (`PlantVisualSystem.PlantVisualService`)
+- Posición: `pivotCF = CFrame.new(worldX, plantY, worldZ)`; `targetCF = pivotCF * CFrame.Angles(0, math.rad(yRotation), 0) * CFrame.new(-PlantAttachment.CFrame.Position)`; `model:PivotTo(targetCF)`. El **`PlantAttachment`** del modelo sigue siendo el ancla (igual que antes con `PlantPivot`).
+- **`plantY` = cara superior del `GardenFloor`** del jardín (no la del `BaseSoil`; cuando el usuario subió el suelo, las plantas quedaban hundidas).
+- `yRotation` aleatoria de `PlantFactory.create()` (sin cambios).
+- Nombre del modelo: **`Plant_<gardenId>:<slotId>`**.
+- Attributes en **todos** los modelos de planta (single **y** multi-harvest): **`GardenId`, `SlotId`, `DefinitionId`**. Faltaba `GardenId` en las multi-harvest, por eso la pala/trowel/extractor no las detectaban.
+- **Partes de la planta con `CanQuery = true`** (los tools hacen raycast a ellas). Las frutas de las multi-harvest: `CanQuery = false`.
+- Las frutas llevan attributes `GardenId`, `SlotId` (de su planta) y `FruitSlot`.
+- Bucle de restauración: separar la clave con `string.find(key, ":")` + `sub`, **no** con el patrón `":(%d+)$"`.
+- **Listener de `PlantEffectService`** (efecto aplicado / expirado): **esperar** a que el servicio exista (máx. 30 s, con un `warn` si no aparece). Un `getInstance()` único fallaba según el orden de arranque, y entonces las regaderas no aceleraban el visual.
+- `reSyncFruitTimers(gardenId, plotId)`: construir la clave con el parámetro recibido (había una referencia a `slotId` sin definir → `"1:nil"`).
+- Se eliminó `_getPlotService` (código muerto).
 
 ---
 
-## SYS-05 — Cliente PC / Mobile
+## SYS-05 — Frutas y cosecha (`HarvestService`, handlers y controller)
 
-**Scripts (`StarterPlayer.StarterPlayerScripts.ToolSystem`):**
-- `ToolUseController`:
-  - Semillas y `Plant` items: raycast al **`GardenFloor`** (en lugar de `getSoilUnderMouse`/`getSoilFromPlantModel`) → envía `(gardenId, x, z)`.
-  - Tools: raycast al **modelo de la planta** → lee el attribute `slotId` del modelo (subiendo por los ancestros hasta el `Model` `Plant_*`) → envía `(gardenId, slotId)`. Sustituye a `handlePlotToolClick`.
-  - Ya no usa `_GardenId` / `_PlotId`.
-- `TrowelController` (mover plantas): **propuesta D5** [INFERIDO como final]: recoger la planta → click en un punto libre del `GardenFloor` → el servidor valida el radio mínimo → la mueve. UNKNOWN si quedó exactamente así.
-- `PlantVFXController`: antes leía `EquipState.activeSoil` (`BaseSoil`). Final: usa la posición/planta objetivo. Detalle UNKNOWN.
-- **GUI de planta**: al clickear o tocar una planta se muestran los detalles de esa planta (pedido en la orden). **UNKNOWN** si se implementó. Preguntar al usuario.
-- **Botón PLOT**: debe desaparecer (orden). **UNKNOWN** si se quitó.
+**Tipos:**
+- **Multi-harvest** (tomate, papa, avocado…): la planta crece; al madurar, cada fruta tiene `FRUIT_COOLDOWN = 60` s + su `generationTime` (240–900 s según la planta). Los prompts están en el `Attachment "ProximityPrompt"` dentro del `FruitConector` de cada fruta.
+- **Single-harvest** (carrot, nabo, astral_nabo, petunia, astral_petunia, red_rose, astral_red_rose): **la fruta es la planta**. No tienen `generationTime`; su único tiempo es el `growthTime`. El `Attachment "ProximityPrompt"` está dentro de un Part cualquiera del modelo `Fruit` (a veces `Center`).
 
-**Restricción de raycast** [INFERIDO]: para clicks con un tool, el raycast debe ignorar el personaje y, al plantar, solo aceptar `GardenFloor`. Ver `04` P6.
+**Implementación final [CONFIRMADO]:**
+- **Single-harvest:** el runtime de la fruta se crea **al plantar** (`_connectCreated`) con `vStart = now`, `rAt = now + growthTime`, y se programa con `_scheduleFruit` (`task.delay` exacto) → `_notifyFruitVisual` (timer) → a los `growthTime` s exactos `_notifyFruitReady` → `_completeFruitVisual` (prompt de cosecha). Es el mismo mecanismo que las multi-harvest. No depender del scheduler de 5 s ni de `maturePlant`.
+- **Multi-harvest:** `initializeFruits` al madurar la planta → `_scheduleFruit` con `task.delay(FRUIT_COOLDOWN)` y `task.delay(FRUIT_COOLDOWN + generationTime)`.
+- **Boost:** loop de `HarvestService` con `TICK_INTERVAL = 1` s: para plantas con efecto activo, adelanta `regrowAt` según la velocidad y **reprograma** el `task.delay`.
+- **La madurez la decide solo el servidor:** una fruta solo aparece con prompt de cosecha si el servidor ya la marcó lista (`regrowAt = nil`). Progreso visual = `generationTotal − (regrowAt − now)`, **sin volver a multiplicar por la velocidad** (el doble conteo hacía que con la Cosmic la fruta pareciera madura con 282 s restantes).
+- Sin ningún `tonumber(plotId)`: `_scheduleFruit` (notificaciones), `restoreFruits` (no saltar UUID), `getGrowthRate(gardenId, slotId)`, sync de mutaciones y `_mutationDelays`.
+- `canAccessPlot` → **`canAccessGarden`**.
+- Se eliminaron las llamadas a `ParcelGameplayService` (`addHarvestXP` y `parcelStars` en `initializeFruits` y en el respawn) → en su lugar, `GardenProgressService:addXP` (ver `02c`).
+- `FruitHarvestHandler` y `FruitSkipHandler`: sin `type(plotId) ~= "number"` (aceptan UUID).
+- `FruitHarvestController` (cliente): lee el attribute **`SlotId`** (no `PlotId`).
 
----
+**Producto Robux "madurar fruta al instante"** (25 Robux, id `3711141516`): ya no hay forma de abrirlo (el prompt de timer no es interactivo). `FruitSkipHandler` se conserva intacto para usarlo desde otra UI en el futuro (decisión pendiente del usuario).
 
-## SYS-06 — Sprinkler con radio real
-
-**Estado final:** `ParcelDetector` (BFS en grid de `BaseSoil`) **eliminado** [CONFIRMADO]. Se reemplaza por un **radio circular en XZ**: distancia euclidiana `sqrt((px-sx)² + (pz-sz)²) <= radio` sobre las posiciones `(x, z)` de las plantas activas del jardín.
-
-**Objetos:** carpeta `Sprinklers` en cada jardín [CONFIRMADO que existe]. **UNKNOWN** si la creó el usuario o el código.
-
-**Datos:**
-- Radio por tipo (basic / rare / ultrarare / cosmic): **UNKNOWN** (pregunta D6 sin respuesta registrada). Buscarlo en la config o definición de sprinklers del proyecto. Si no existe → **preguntar al usuario** (es gameplay).
-- [CONFIRMADO] Se limpiaron referencias a parcelas en el **sonido** de los sprinklers.
-
-**Colocación:** `PlaceSprinkler` en una posición XZ libre [INFERIDO de D6].
+**MutationGUI de frutas/parcelas:** el usuario dijo "podemos obviarla" (estaba ligada a parcelas). **UNKNOWN** su estado final: auditar y preguntar.
 
 ---
 
-## SYS-07 — Huevos (soportes)
-
-**Estado final** [CONFIRMADO]: "el sistema de huevos ya los reubica solos en **soportes**, conservando su incubación". Hay una carpeta **`Eggs`** por jardín. **Sweet Egg** = 5 horas de incubación.
-
-**UNKNOWN / REQUIERE VERIFICACIÓN:**
-- Si este sistema de soportes ya existía antes del rework o se creó en él.
-- Estructura de la carpeta `Eggs` (número de soportes, nombres, attributes).
-- Qué pasó con `EggPlantRequest` (antes usaba `BaseSoil`/`plotId`).
-
-**Acción:** auditar en la Sección 0. Si no existe, **detenerse y preguntar** antes de diseñar nada.
-
----
-
-## SYS-08 — Consola (`GamepadController`) — FUERA DE ALCANCE
-
-**Estado final** [CONFIRMADO]: no se adaptó. Queda inerte (no da error y no encuentra `BaseSoil`).
-**NO HACER:** reescribirlo en esta recuperación. Si el usuario lo pide más adelante, el diseño de la orden era: el joystick derecho navega entre **modelos de planta** activos, `ButtonA` selecciona y el highlight va sobre el modelo. **No** volver a recolectar todo cada 5 s (ver `04` P5).
-
----
-
-## SYS-09 — Garden Level y Resonancia
-
-**Propósito:** progresión por jardín. Cada fruta cosechada da XP, el nivel llega a 100 y en el 100 se puede "resonar" (prestigio).
-
-**Scripts** [CONFIRMADO: 5 scripts; nombre conocido solo `GardenProgressConfig`]. Nombres del resto UNKNOWN. Estructura sugerida si no existen (siguiendo `gosa`): un servicio de servidor dueño del estado y la lógica, un controlador o script de cliente para el cartel y la confirmación, y la config.
-
-**Config (`GardenProgressConfig`)** [CONFIRMADO: todos los números están aquí]:
-| Parámetro | Valor final |
-|---|---|
-| XP por fruta | = número de rareza de la fruta (Common = 1 … OdysseySecret = 8). La tabla de rarezas ya existe en el proyecto; **no duplicarla**, leer su número. |
-| Nivel mínimo / máximo | 1 / **100** (⚠ ver nota de nivel de prueba) |
-| XP para pasar de N a N+1 | **6 × N² + 44** (la misma curva que los pets) |
-| XP total 1 → 100 | 1.974.456 (verificación: Σ_{N=1}^{99}(6N²+44)) |
-| Coste de resonancia | **1.000.000 Odyssey Coins** |
-| Bonus por resonancia | **+0,05 %** del valor de venta de la fruta por nivel de resonancia |
-| Tope del bonus | **50 %** (= 1.000 niveles de resonancia) |
-| HoldDuration del prompt | **1 s** |
-
-**Flujo final:**
-1. Al cosechar una fruta → +XP (su rareza) al jardín del **dueño**. Al cruzar el umbral se sube de nivel (puede subir varios niveles de una vez [INFERIDO]).
-2. En el nivel 100 → la barra queda llena y **dorada**, con el texto **"Lv. 100 MAX"**. La XP sobrante no se acumula [INFERIDO; verificar].
-3. En el nivel 100, **solo para el dueño**, se habilita el `ProximityPrompt` "**Resonate (1,000,000)**" (mantener 1 s).
-4. Al activarlo → **pide confirmación** → cobra 1.000.000 → **vuelve a nivel 1 con 0 XP** → resonancia +1. Si no alcanza el dinero, avisa.
-5. **Cada fruta guarda el nivel de resonancia en el momento de la cosecha**, y al venderse aplica `+0,05 % × resonancia` (tope 50 %).
-
-**Cartel (`SurfaceGui` en `GardenLevel`)**, todo centrado:
-- Título: **"Garden Level"** si la resonancia es 0, y **"Garden Level N"** si es N > 0.
-- **"Lv. X"**.
-- Barra de progreso.
-- Texto **"340 / 1,200 EXP"** (formato con separador de miles).
-- Se actualiza **en vivo al cosechar**, y los visitantes lo ven igual.
-
-**Discrepancia con la petición del usuario:** el usuario escribió "volverá a nivel 0 1/x". El agente implementó "vuelve a nivel 1 con 0 XP". **Implementar nivel 1 con 0 XP** (versión final reportada sin objeción del usuario), pero mencionarlo en el reporte de la sección.
-
-**Limitaciones conocidas (aceptadas):**
-- El precio que muestra el prompt de una fruta **antes** de cosecharla **no** incluye el bonus de resonancia (se aplica al cosechar). En el inventario y al vender sí aparece.
-- Balance: llegar a 100 requiere ~2 M de XP con 1–8 XP por fruta, lo que es muy lento. El agente recomendó multiplicar la XP por fruta (×10 o ×50) o ajustar la curva. **Decisión del usuario: UNKNOWN.** No cambiarlo sin preguntar.
-
-**Datos persistentes** [INFERIDO]: nivel, XP y resonancia por jugador/jardín, y el nivel de resonancia por fruta. Nombres de campos y namespace: **UNKNOWN**.
-
-**Remotes:** para la confirmación de resonancia hace falta uno cliente→servidor (o uso de `PromptTriggered` en el servidor + remote de confirmación). Nombre UNKNOWN.
-
-**Objetos manuales:** `GardenLevel` (ver `03` §3.4).
-
-**⚠ Nivel de prueba:** el agente ofreció poner temporalmente el nivel máximo en 2 para probar. **UNKNOWN** si se hizo. Validar que el valor final sea **100**.
-
----
-
-## SYS-10 — Migración de datos (`GardenMigration`)
-
-**Estado final** [CONFIRMADO]:
-- **ModuleScript** `GardenMigration`, con constante **`ENABLED = true`**.
-- Lo llama **`PlantGrowthSystem.Init`** justo **antes** de cargar (`restorePlants`) las plantas de cada jugador. Corre **una sola vez por jugador**.
-- Marca en el perfil: **`gardenReworkMigrated = true`**.
-- **Protección en `restorePlants`**: no debe intentar restaurar plantas en formato viejo (`plotId`) como si fueran nuevas [INFERIDO sobre el detalle; la existencia de la protección está CONFIRMADA].
-
-**Reglas finales:**
-| Caso | Resultado |
-|---|---|
-| Planta **madura y extraíble** | → **`Plant` item** en el inventario (vía `PlantFactory.fromExisting()`), conservando tamaño, variante y mejoras |
-| Planta **en crecimiento** (sea o no extraíble) **o no extraíble** | → **su semilla** al inventario |
-| **Frutas maduras** de esas plantas | → al inventario **como frutas** |
-| Inventario sin espacio | **NO** se marca como migrado; se reintenta en la próxima entrada |
-| Huevos | **No los toca la migración.** El sistema de huevos los reubica en soportes conservando la incubación |
-
-**Datos:** las propiedades de cada planta están en `properties` (es el `plantInstance`) [CONFIRMADO].
-
-**⚠ Diferencia con la orden original** (implementar la FINAL, pero mencionarlo al usuario en el reporte):
-- La orden decía que una planta extraíble *en crecimiento* se convertía en `Plant` item. La final la convierte en **semilla**.
-- La orden decía que una `noExtract` madura se cosechaba y se eliminaba. La final da **semilla + frutas maduras**.
-- UNKNOWN: si una `noExtract` madura da semilla **y** frutas, o solo frutas. Preguntar.
-
-**Versiones descartadas:** ver `05` B1 y B2.
-
-**Prueba en producción** [CONFIRMADO, respuesta del agente]: ver `06` Sección 12.
-
----
-
-## SYS-11 — Residuos de parcelas en otros sistemas
-
-[CONFIRMADO] Ajustados:
-- **Tutorial**: el beam apunta al `GardenFloor`.
-- **Sonido de sprinklers**: sin referencias a parcelas.
-- **Sweet Frog**: sin referencias a parcelas.
-- `ParcelGameplayService` (parcelas bloqueadas): **UNKNOWN** (D7).
-
----
-
-## SYS-12 — Multi-jardín y capacidad del servidor
-
-[CONFIRMADO]
-- `GardenService` asigna jardines a jugadores (`getPlayerGarden`, `getGardenPlayer`). Sin cambios conocidos.
-- Cada clon de `Garden_001` necesita:
-  - un nombre único: `Garden_002`, `Garden_003`, …
-  - attribute **`GardenID`** único en el **modelo** (2, 3, …).
-  - attribute **`GardenId`** con el mismo número en su **`GardenFloor`**.
-  - ⚠ las mayúsculas difieren (`GardenID` vs `GardenId`) según el reporte. Verificar la grafía exacta en el proyecto.
-- **Max Players del place = número de jardines** (ej. 6 bases → 6 jugadores). Si hay más jugadores que jardines, el excedente entra sin jardín.
-- Huevos, sprinklers, cartel y migración no dependen del número de bases.
+## SYS-06 — Timers (BillboardGui, cliente `PlantVisualController`)
+- Los **prompts de timer** (`IsFruitTimer = true`) quedan **deshabilitados** (`Enabled = false`, `ClickablePrompt = false`): solo sirven como marca interna. La E aparece **solo** en las frutas maduras cosechables.
+- El cliente dibuja **un único** texto flotante (BillboardGui, fuente **Fredoka**, texto blanco con borde negro grueso):
+  - **Frutas:** `Adornee` = `Attachment "ProximityPrompt"` de la fruta; `StudsOffset = (0, 1.2, 0)`.
+  - **Plantas en crecimiento** (multi-harvest): **3 studs** sobre el `PlantAttachment`; muestra el tiempo de crecimiento de la planta. Las single-harvest usan su timer de fruta (no se duplica).
+  - Solo se muestra **el más cercano** (planta o fruta), en pantalla y a ≤ **`TIMER_RANGE = 12`** studs.
+  - **Responsive:** tamaño del texto = **4,8 % de la altura de la pantalla**, mínimo **28** y máximo **56** (≈ 28 en móvil horizontal, 38 en tablet, 51 a 1080p, 56 a 1440p+). Se recalcula al cambiar la ventana o rotar el móvil.
+  - Se acelera en vivo con regaderas y sprinklers, y vuelve a la normalidad al expirar el efecto.
+- **No** tocar los timers de huevos ni los de la PowerStation con este sistema (los huevos tienen su propio prompt; ver `02c`).

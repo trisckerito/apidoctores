@@ -1,90 +1,103 @@
-# 05 — BUGS Y SOLUCIONES FINALES
+# 05 — BUGS RESUELTOS: QUÉ NO REPETIR
 
-> Solo se incluyen bugs y riesgos que **constan en el historial**. Cada uno indica qué implementar y qué **NO** repetir.
+> Formato: **BUG** → **CAUSA** → **SOLUCIÓN FINAL** → **NO HACER**. Implementar directamente la solución final.
 
----
+## A. Proceso de edición (raíz de muchos bugs)
+| ID | Bug | Causa | Solución final / NO hacer |
+|---|---|---|---|
+| A1 | Cambios "hechos" que no estaban en el código (`handlePlantToolClick` inexistente → `attempt to call a nil value` en `ToolUseController:288` y `:368`; `localX/localZ` nunca calculados; la conversión local→world nunca aplicada) | `gsub`/MultiEdit fallaron en silencio (archivos con `\n` doble, caracteres especiales) | **Releer después de cada edición.** No dar por hecho un reemplazo sin verificarlo |
+| A2 | Errores de sintaxis (`end)` huérfano en PlantHandler, `endend` en ToolUseController, `end` sobrante en PlantVisualService) | Reemplazos de bloques largos | Editar en bloques pequeños + compilar cada script modificado |
+| A3 | Código escrito durante Play que se perdió | Studio no guarda lo editado en Play | Detener el Play antes de editar |
+| A4 | Trazas de debug olvidadas | — | Quitarlas al cerrar cada arreglo |
 
-## B1 — La migración perdía todas las plantas en crecimiento
-- **BUG:** la primera versión de la migración buscaba la semilla de la planta por un **campo que no existe**. Resultado: no encontraba la semilla y las plantas en crecimiento se habrían perdido sin compensación.
-- **CAUSA:** se asumió un nombre de campo sin leer la estructura real. Los datos de la planta están en `properties` (el `plantInstance`).
-- **SOLUCIÓN FINAL:** resolver la semilla desde la definición real de la planta (`definitionId` / datos de `properties`), leyendo cómo el proyecto relaciona planta ↔ semilla.
-- **IMPLEMENTACIÓN FINAL:** antes de escribir la migración, **leer** con el MCP la definición de plantas y semillas y una entrada real de `plants[...]`. Si la búsqueda de la semilla devuelve `nil` → **no** marcar como migrado; registrar un warn y conservar la planta en los datos viejos.
-- **NO HACER:** suponer nombres de campo (`seedId`, `seed`, etc.) sin verificarlos. Tampoco descartar silenciosamente una planta cuya semilla no se encuentra.
+## B. `plotId` → `slotId` (UUID)
+| ID | Bug | Solución final |
+|---|---|---|
+| B1 | Modelo de planta bugueado (sin crecimiento, prompt ni GUI) | `_makeKey(gardenId, plotId)` usaba el parámetro renombrado (nil) → usar `slotId`. Restore: parsear la clave con `find(":")`, no con `":(%d+)$"` |
+| B2 | Las frutas nunca aparecían | `HarvestService._scheduleFruit` enviaba `tonumber(plotId) or 0` → clave `gardenId:0`. Pasar el slotId tal cual |
+| B3 | Frutas no restauradas al reconectar | `restoreFruits` con `if not numPlotId then continue end` → aceptar el string |
+| B4 | Sin boost de crecimiento | `getGrowthRate(gardenId, tonumber(plotId) or 0)` → pasar el slotId |
+| B5 | Cosecha bloqueada | `type(plotId) ~= "number"` en `FruitHarvestHandler`/`FruitSkipHandler`/`FruitHarvestController`; el controller leía `PlotId` → leer `SlotId` |
+| B6 | `canAccessPlot` fallaba con UUID | Usar `canAccessGarden` |
+| B7 | Regadera/sprinkler sin plantas en el radio | `PlantGrowthService._parseKey` hacía `tonumber` → `getGardenPlants` devolvía 0. Sin `tonumber` |
+| B8 | El timer de las frutas no se aceleraba en vivo | `reSyncFruitTimers` armaba la clave con `slotId` inexistente (`"1:nil"`) |
+| B9 | Sync de frutas al entrar un jugador | 4 `tonumber` en `PlantVisualService` → eliminados |
+| B10 | Pets Sweet Frog/Dog/Nebula no aplicaban el efecto | Usaban `plantState.plotId` + `getPlotPos` → `slotId` + posición del modelo o `instance.x/z` |
+| **Regla** | **Prohibido `tonumber` sobre IDs de planta** | Buscar `tonumber(` en todos los servicios del flujo |
 
-## B2 — La migración podía correr después de cargar el jardín
-- **BUG:** en la versión anterior (Script en `PlayerAdded`), la migración podía ejecutarse **después** de que `PlantGrowthSystem` restaurara las plantas. Eso es una condición de carrera: datos viejos interpretados como nuevos, o plantas duplicadas o perdidas.
-- **SOLUCIÓN FINAL:** `GardenMigration` es un **ModuleScript** llamado **síncronamente desde `PlantGrowthSystem.Init`**, justo **antes** de `restorePlants` de cada jugador. Además, una **protección dentro de `restorePlants`** ignora entradas con formato viejo.
-- **NO HACER:** un Script independiente conectado a `PlayerAdded`, ni `task.spawn`/`task.defer` para la migración.
+## C. Mundo y coordenadas
+| ID | Bug | Solución final |
+|---|---|---|
+| C1 | No se podía clickear el `GardenFloor` | Quedaba bajo los `BaseSoil` → cara superior +0,05 sobre su tope y `BaseSoil.CanQuery = false` |
+| C2 | Al reconectar en otro jardín, las plantas aparecían en el jardín anterior | Guardar `localX/localZ` relativos al `CFrame` del **`GardenFloor`** (no del Water, que es cosmético) y convertir al restaurar; auto-reparar las plantas sin posición local |
+| C3 | Plantas hundidas | Apoyarlas en la cara superior del `GardenFloor`, no en el `BaseSoil` |
+| C4 | Agua replicada por código, orientada al revés en Garden_003/005 | Rotaciones distintas entre jardines (−44° vs +45°). **No replicar decoración por código**: el usuario clona `Garden_001` a mano |
+| C5 | No se podía cambiar el `MeshId` del Water en runtime | Clonar el Part de referencia |
+| C6 | Clones con el mismo `GardenID` | IDs únicos en el modelo y en el suelo |
+| C7 | Más jugadores que jardines | Max Players = número de jardines |
 
-## B3 — Plantas a la altura equivocada tras subir el suelo
-- **BUG:** las plantas se apoyaban en el `BaseSoil`. Cuando el usuario subió el `GardenFloor`, quedaron hundidas o a mala altura.
-- **SOLUCIÓN FINAL:** la altura de la planta = cara superior del **`GardenFloor`** del jardín (+ el offset del modelo).
-- **NO HACER:** usar `BaseSoil`, `PlantPivot` o una Y fija codificada a mano.
+## D. Frutas y timers
+| ID | Bug | Solución final |
+|---|---|---|
+| D1 | Single-harvest: el prompt de cosecha solo aparecía al reconectar; después, el timer se quedaba en "0m 0s" | **No** parchear con `task.delay(maturePlant)` ni saltar el timer. **Crear el runtime de la fruta al plantar** con `rAt = now + growthTime` y `_scheduleFruit` (idéntico a las multi-harvest). Se descartaron 4 intentos fallidos y su código muerto (`isInstant` reveal-retry, atributos duplicados en `_createPlantVisual`, retry de `_completeFruitVisual`) |
+| D2 | Con la regadera Cosmic, la fruta mostraba peso y precio pero no se podía cosechar (faltaban 282 s) | Progreso visual con doble conteo de la velocidad. **La madurez la decide solo el servidor** (`regrowAt = nil`); progreso = total − restante |
+| D3 | Dos regaderas seguidas congelaban el timer y la animación | Mismo doble conteo en el aviso de cambio de velocidad → calcular desde el `regrowAt` del servidor |
+| D4 | Las regaderas a veces no aceleraban el visual | El listener de `PlantEffectService` se registraba una sola vez sin esperar → **esperar hasta 30 s** |
+| D5 | El prompt de timer tenía una E que abría la compra por Robux | Primero se quitó la tecla, y el prompt desapareció (un ProximityPrompt necesita tecla para mostrarse). **Final:** prompt deshabilitado + BillboardGui propio |
+| D6 | Varios timers a la vez = desorden visual | Mostrar solo el más cercano a ≤ 12 studs |
+| D7 | El texto era enorme en móvil | Tamaño = 4,8 % del alto de la pantalla, entre 28 y 56 |
+| D8 | El log `[ParcelGameplayService] addHarvestXP … callbacks: 0` | Llamadas muertas → eliminadas (reemplazadas por Garden Level) |
 
-## B4 — Inventario lleno durante la migración
-- **RIESGO resuelto en el diseño final:** si los items no caben en el inventario, se perderían.
-- **SOLUCIÓN FINAL:** si algo no entra, **no** se marca `gardenReworkMigrated`, y se reintenta en la siguiente entrada.
-- **NO HACER:** marcar como migrado tras una entrega parcial. Tampoco descartar el excedente.
-- ⚠ UNKNOWN: cómo se evita entregar dos veces lo que **sí** entró en un intento parcial. Comprobar en el código existente. Si no está resuelto, **reportarlo al usuario** antes de activar la migración: o se hace atómica (comprobar el espacio total antes de entregar nada) o se marcan las entradas ya migradas una por una.
+## E. Tools
+| ID | Bug | Solución final |
+|---|---|---|
+| E1 | La regadera nunca se consumía | **RemoteEvent `WaterComplete` duplicado** → borrar el duplicado y revisar que no haya nombres repetidos |
+| E2 | El VFX del agua usaba un Model como Part | Ya no aplica: VFX de área desde el punto, dentro de un `pcall` |
+| E3 | Los tools no detectaban las plantas | Las partes de las plantas tenían `CanQuery = false` (por la optimización masiva) → `true` en las plantas |
+| E4 | Pala, trowel y extractor no detectaban las multi-harvest | Faltaba el attribute `GardenId` en esos modelos |
+| E5 | Sprinkler: las plantas nuevas no recibían el efecto | Se aplicaba una sola vez → zona activa con `applyEffectWithRemaining` |
+| E6 | Sonido y limpieza de sprinklers buscaban en el `BaseSoil` | Carpeta `Sprinklers` por jardín |
+| E7 | El sprinkler no giraba | Un LocalScript en workspace no corre → `Script` con `RunContext = Client` |
+| E8 | La pala tardaba 9 s y pisaba la velocidad del jugador | 2 s en loop; sin `WalkSpeed = 16` / `JumpPower = 50` |
+| E9 | Trowel: el click de destino fallaba cerca de otras plantas; se podían apilar plantas; soltaba la planta sin explicación | El raycast excluye las plantas; validar jardín + 1 stud; si falla, mantener la planta en la mano |
+| E10 | Trowel: cancelar mientras esperaba respuesta bloqueaba el siguiente uso | Limpiar la marca al cancelar |
+| E11 | El extractor no extraía si no cargaba la animación | Enviar siempre el aviso final |
+| E12 | Misclicks gastaban usos | Cooldown de 0,2 s (varita 0,1 s), comprobado **antes** de cualquier estado de espera |
 
-## B5 — Restos de parcelas en otros sistemas tras borrar `Parcels`
-- **BUG:** el tutorial (beam hacia una parcela), el **sonido de los sprinklers** y la **Sweet Frog** referenciaban parcelas o `BaseSoil`.
-- **SOLUCIÓN FINAL:** tutorial → `GardenFloor`. Sonido de sprinklers y Sweet Frog sin referencias a parcelas.
-- **NO HACER:** borrar `Parcels` sin buscar antes referencias en **todos** los scripts (lista de búsqueda en `01` §3.3).
+## F. Huevos y pets
+| ID | Bug | Solución final |
+|---|---|---|
+| F1 | El hatch se podía hacer desde cualquier distancia | El servidor valida 9 studs horizontales (+1) |
+| F2 | El aviso de rechazo nunca se mostraba (`reason:nil`, ×18 rechazos) | Orden de argumentos `uuid, ok, animIndex, soilCF, reason` + cooldown de 0,2 s antes del flag |
+| F3 | El skip dejaba un tamaño final incorrecto | Calcular desde la escala inicial |
+| F4 | El prompt no respetaba la posición movida en el asset | Engancharlo al `Attachment "ProximityPrompt"` del asset |
+| F5 | El timer de incubación se veía desde 25 studs | 9 studs |
+| F6 | El aviso "red stands" salía a cada rato | El click del OK atravesaba la ventana → bloquear clicks mientras está abierto + 0,3 s después |
+| F7 | Lucky Block: dos huevos superpuestos | Si el soporte está ocupado, usar el primer soporte libre |
+| F8 | El highlight de los pets no se veía (el anuncio sí) | El cliente esperaba los remotes 10 s y el servidor los creaba después → los remotes existen desde el arranque (highlight, sonido de habilidad, Lucky Block, Bunny) |
+| F9 | "El tiempo del huevo sube de 2 s a 1 h" (Lunaris) | **No era un bug**: era el timer de otro huevo cercano. No tocar la lógica de Lunaris |
+| F10 | Dos soportes con el mismo `EggSlot` al duplicar | Renumerar después de cualquier cambio de soportes |
 
-## B6 — `GamepadController` inerte
-- **ESTADO:** no se adaptó. No da error y no encuentra nada.
-- **DECISIÓN FINAL:** se deja así (update de consola futura).
-- **NO HACER:** reescribirlo dentro de esta recuperación. Tampoco "arreglarlo" volviendo a crear `BaseSoil`.
+## G. Limpieza y referencias
+| ID | Bug | Solución final |
+|---|---|---|
+| G1 | Las plantas desaparecían después de borrar sistemas | `GardenService` (línea ~84) referenciaba `PlotPresenceSystem`, y `PlantGrowthService._resolveServices` referenciaba `ParcelGameplaySystem` (el `pcall` no protegía el índice) → quitar las referencias y usar `FindFirstChild` |
+| G2 | `ParcelInteractionService` hacía `require` de `PlotPresenceService` borrado | Quitar `_activePlot` y la dependencia |
+| G3 | Usuario: "¿desactivaste o eliminaste?" | Borrar del DataModel (los scripts de servidor deshabilitados no son explotables, pero son código muerto) |
+| G4 | `DeletePlantHandler` viejo | Borrado junto con sus 2 remotes |
 
-## B7 — Jardines clonados con el mismo ID
-- **RIESGO:** al duplicar `Garden_001`, todas las copias heredan `GardenID = 1` y `GardenId = 1`, y el sistema confunde las bases.
-- **SOLUCIÓN FINAL:** cada copia con nombre único, `GardenID` del modelo único y el `GardenId` de su `GardenFloor` igual al del modelo.
-- **NO HACER:** dar por buenos los clones sin verificar los IDs.
+## H. Migración
+| ID | Bug | Solución final |
+|---|---|---|
+| H1 | La semilla se buscaba por un campo que no existe → se perdían las plantas en crecimiento | Relación real planta → semilla desde las definiciones; si es `nil`, no marcar como migrado |
+| H2 | La migración podía correr después de cargar el jardín | ModuleScript llamado desde `PlantGrowthSystem.Init` antes de `restorePlants` |
+| H3 | Inventario lleno | No marcar como migrado; reintentar en la próxima entrada |
+| H4 | Prueba con datos reales | Irreversible para esa cuenta; para repetirla, borrar `gardenReworkMigrated` a mano. Requiere API Services y no estar conectado al juego publicado |
 
-## B8 — Más jugadores que jardines
-- **RIESGO:** con Max Players mayor que el número de jardines, el jugador extra entra sin jardín.
-- **SOLUCIÓN FINAL:** Max Players = número de jardines.
-
-## B9 — Valores de prueba que pueden llegar a producción
-- Nivel máximo de Garden Level: el agente ofreció ponerlo temporalmente en **2**. El valor final debe ser **100**.
-- Tiempos de crecimiento de plantas: anotados como **valores de prueba**; confirmar con el usuario.
-- Sweet Egg: 5 h (dado como valor actual; confirmar que es el de producción).
-- **NO HACER:** publicar sin revisar `GardenProgressConfig` y los tiempos.
-
-## B10 — Precio previo a la cosecha sin bonus de resonancia (limitación aceptada)
-- El prompt de la fruta en la planta muestra el precio **sin** el bonus, que se aplica al cosechar. En el inventario y al vender sí aparece.
-- **No es un bug a corregir** salvo que el usuario lo pida.
-
-## B11 — Balance de XP muy lento (pendiente de decisión)
-- 1 → 100 = 1.974.456 XP con 1–8 XP por fruta, es decir, cientos de miles de cosechas por resonancia.
-- **NO cambiar** sin decisión del usuario. Preguntar si quiere un multiplicador (×10, ×50) o una curva distinta.
-
-## B12 — Prueba de la migración en el place original (datos reales)
-- **RIESGOS** [CONFIRMADOS por el agente]:
-  - Sin "Enable Studio Access to API Services", Studio carga un perfil vacío y la prueba no sirve.
-  - La migración **modifica y guarda** el perfil real. Es irreversible para esa cuenta.
-  - Para repetirla hay que borrar a mano `gardenReworkMigrated` del perfil.
-  - Si la misma cuenta está conectada al juego publicado, el perfil puede estar **bloqueado** por esa sesión. Hay que salir antes.
-- **NO HACER:** activar la prueba sin la confirmación explícita del usuario.
-
-## B13 — Migración nunca probada con datos reales
-- El DEV no tenía datos con formato de parcelas, así que la migración final **no se probó**.
-- **Recomendación final del agente:** verificar con datos de formato viejo **antes** de publicar.
-- **Ahora (juego principal):** los datos viejos reales existen. La prueba se hace en la Sección 12 con la cuenta del usuario, tras su confirmación. Antes de activarla, revisar el código de la migración con una entrada real leída (solo lectura) del perfil.
-
----
-
-## Resumen: implementaciones históricas que NO deben volver
-
-| No usar | Usar en su lugar |
-|---|---|
-| Migración como Script en `PlayerAdded` | ModuleScript llamado desde `PlantGrowthSystem.Init` antes de `restorePlants` |
-| Buscar la semilla por un campo supuesto | Leer la relación real planta → semilla desde las definiciones |
-| Altura desde `BaseSoil` | Cara superior de `GardenFloor` |
-| `PlotPresenceService` (raycast 0,12 s) | Validación en el request |
-| `ParcelInteractionService` / `getActivePlot` | Posición o `slotId` en el request |
-| `ParcelDetector` (BFS) | Radio euclidiano XZ |
-| `canAccessPlot` | `canAccessGarden` |
-| `plotId` numérico | `slotId` UUID + `x`, `z` |
-| Reescribir `GamepadController` | Dejarlo inerte (fuera de alcance) |
+## I. Decisiones que NO son bugs (no "arreglar")
+- Las single-harvest no se pueden mover ni extraer.
+- Las frutas se reinician al mover un árbol con el trowel.
+- El precio del prompt antes de cosechar no incluye la resonancia.
+- La compra de "madurar fruta al instante" quedó sin acceso (el handler se conserva).
+- `GamepadController` inerte.
+- 2 sprinklers del mismo tier no suman velocidad (solo renuevan la duración).
