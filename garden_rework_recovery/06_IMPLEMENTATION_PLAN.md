@@ -1,14 +1,14 @@
-# 06 — PLAN DE IMPLEMENTACIÓN (DOCUMENTO PRINCIPAL)
+# 06 — RUTA DE IMPLEMENTACIÓN RECOMENDADA (GUÍA DE PROCESO)
 
-> **Una sección a la vez.** Al terminar cada una: verificar con `07`, reportar con el formato de `go-worker-contract` y **esperar confirmación**.
-> Protocolo de cada sección: `00_MASTER_PLAN.md` §2.3.
-> **Si la auditoría (Sección 0) muestra que una sección ya está en su versión final → solo verificarla y reportarla. No reescribir.**
+> **Destino: JUEGO PRINCIPAL** (placeId `85407374189603`). Ver precauciones en `00_MASTER_PLAN.md` §1.
+> **Modo:** la ventana tiene **control total**. Esta es la ruta recomendada por dependencias. Puede encadenar fases y ajustar el orden fino, pero **se detiene en las paradas obligatorias** de `00_MASTER_PLAN.md` §2 y valida cada fase con `07` antes de darla por cerrada.
+> Reportar en bloques con el formato de `go-worker-contract`.
 
 ## Orden (derivado de las dependencias)
 
 | # | Sección | Depende de | Parada manual |
 |---|---|---|---|
-| 0 | Arranque y auditoría (solo lectura) | — | Sí (decidir el place destino) |
+| 0 | Arranque: checklist del mapa + auditoría (solo lectura) | — | **Sí** (checklist `03` §0) |
 | 1 | Mundo base: `GardenFloor` | 0 | **Sí** |
 | 2 | Modelo de datos `slotId` | 1 | No |
 | 3 | Plantado libre (servidor) | 2 | No |
@@ -20,35 +20,35 @@
 | 9 | Migración (`GardenMigration`) | 2, 3 | No (pero confirmar las reglas) |
 | 10 | Limpieza de sistemas viejos y residuos | 1–9 validadas | Confirmar (destructivo) |
 | 11 | Multi-jardín y configuración del place | 10 | **Sí** (clonado manual) |
-| 12 | Prueba de migración con datos reales | 9, 11 | **Sí** (riesgo irreversible) |
+| 12 | Activar la migración y probar con datos reales | 9, 11 | **Sí** (riesgo irreversible) |
 
 Fuera de alcance: **consola / `GamepadController`** (ver `02` SYS-08).
 
 ---
 
-## SECCIÓN 0 — Arranque y auditoría (SOLO LECTURA)
+## SECCIÓN 0 — Arranque: checklist del mapa + auditoría (SOLO LECTURA)
 
 1. Cargar los skills `gosa` y `go-worker-contract`.
-2. Listar los Studios abiertos (MCP: *List Roblox Studios* / *Get Studio State*). Identificar el place: original `85407374189603` o DEV `86748110736040`.
-3. **Preguntar al usuario:** ¿en qué place se implementa esta recuperación?
-   - DEV existente (`86748110736040`), si sigue vivo.
-   - Una nueva copia DEV del original.
-   - Directamente en el original (desaconsejado: la orden exigía trabajar en una copia).
-4. Recorrer el place y rellenar la tabla de `01_PROJECT_STATE.md` §4, con las búsquedas de §3.3.
-5. Para cada `UNKNOWN` de `02`, intentar resolverlo leyendo el proyecto. Prioridades:
-   - firma actual de `PlantRequest` y `ToolUseRequest`,
-   - nombres de campos en `PlayerDataService`,
+2. Comprobar con el MCP (*List Roblox Studios* / *Get Studio State*) que el Studio abierto es el **juego principal** (`85407374189603`). Si es otro place → avisar y detenerse.
+3. **PARADA OBLIGATORIA:** presentar al usuario el **checklist de `03_WORLD_MANUAL_SETUP.md` §0**, con lo que hizo y **cómo lo hizo antes**, y preguntar:
+   - ¿Ya hiciste tu parte en el mapa?
+   - ¿Hay un respaldo (versión guardada o publicada) del juego principal?
+   - ¿La copia DEV (`86748110736040`) sigue existiendo? (Atajo: copiar objetos y scripts desde ahí.)
+   - ¿Desactivamos API Services durante el desarrollo?
+   - Estrategia de jardines: ¿terminar `Garden_001` y clonar al final, como en el DEV?
+4. Según las respuestas: si dice que sí → verificar cada objeto con el MCP. Si dice que no → darle instrucciones (`03` §3) y esperar.
+5. Auditar el juego principal (solo lectura) con las búsquedas de `01` §3.3. Rellenar la tabla de `01` §4. Normalmente estará todo en el **estado pre-rework** (parcelas, `PlotSystem`, etc.); confirmarlo.
+6. Resolver leyendo el proyecto todos los `UNKNOWN` posibles de `02`:
+   - firmas de `PlantRequest` y `ToolUseRequest`,
+   - campos de `PlayerDataService`,
    - relación planta → semilla,
-   - config de sprinklers (radios),
-   - estructura de `Eggs`, `Sprinklers` y `GardenLevel`,
-   - existencia de `ParcelGameplayService`, `PlotPresenceService`, `ParcelInteractionService` y el botón PLOT,
-   - GUI de detalle de planta.
-6. **Reportar:** la tabla rellenada, los UNKNOWN resueltos y los que siguen abiertos, y qué secciones parecen ya hechas.
-7. **DETENERSE.** No modificar nada.
-
-**Salida esperada:** lista de secciones a implementar, verificar o saltar.
-
----
+   - config de sprinklers,
+   - sistema de huevos y `EggPlantRequest`,
+   - `ParcelGameplayService`,
+   - botón PLOT,
+   - tabla de rarezas,
+   - curva de XP de pets.
+7. Reportar el resultado y las preguntas de gameplay pendientes. Con eso, continuar por cuenta propia.
 
 ## SECCIÓN 1 — Mundo base: `GardenFloor`
 
@@ -155,7 +155,7 @@ Fuera de alcance: **consola / `GamepadController`** (ver `02` SYS-08).
 
 1. **Confirmar con el usuario** las reglas finales (`02` SYS-10), incluidas las diferencias con la orden original y el caso `noExtract` maduro.
 2. Leer una entrada real de formato viejo (o crear una de prueba en el DEV) y la relación planta → semilla (`05` B1).
-3. Implementar el **ModuleScript** `GardenMigration` (`ENABLED` como constante), llamado desde `PlantGrowthSystem.Init` **antes** de `restorePlants` (`05` B2).
+3. Implementar el **ModuleScript** `GardenMigration` con **`ENABLED = false`** (juego principal: no se activa hasta la Sección 12), llamado desde `PlantGrowthSystem.Init` **antes** de `restorePlants` (`05` B2).
 4. Reglas:
    - madura y extraíble → `Plant` item,
    - en crecimiento o no extraíble → semilla,
@@ -163,7 +163,7 @@ Fuera de alcance: **consola / `GamepadController`** (ver `02` SYS-08).
    - inventario lleno → no marcar y reintentar (`05` B4: resolver la entrega parcial),
    - huevos → no tocarlos.
 5. Flag `gardenReworkMigrated = true` al completar.
-6. Probar en el DEV con una planta vieja falsa (`05` B13).
+6. Mientras esté desactivada, `restorePlants` debe **ignorar** (no borrar) las entradas de formato viejo. Así los datos viejos quedan intactos hasta activar la migración.
 7. Verificar con `07` §S9 → reportar → detenerse.
 
 ---
@@ -196,19 +196,19 @@ Fuera de alcance: **consola / `GamepadController`** (ver `02` SYS-08).
 
 ---
 
-## SECCIÓN 12 — Prueba de migración con datos reales (opcional; la decide el usuario)
+## SECCIÓN 12 — Activar la migración y probar con datos reales
 
-1. Explicarle al usuario los riesgos de `05` B12 y obtener una confirmación explícita.
-2. Preparación (manual): portar los cambios al Studio del original, activar "Enable Studio Access to API Services" y salir del juego publicado.
-3. Play → comprobar que las plantas viejas llegan al inventario según las reglas y que `gardenReworkMigrated = true`.
-4. Reportar. Indicar cómo repetir la prueba (borrar el flag a mano).
-
----
+1. Explicar al usuario los riesgos de `05` B12 y obtener una **confirmación explícita**.
+2. Preparación: activar *Enable Studio Access to API Services*, salir del juego publicado con su cuenta y tener el respaldo del place.
+3. Cambiar `GardenMigration.ENABLED = true`.
+4. Play en Studio con la cuenta del usuario → comprobar que las plantas viejas llegan al inventario según las reglas y que `gardenReworkMigrated = true`.
+5. Reportar. Explicar cómo repetir la prueba (borrar el flag a mano).
+6. **Publicar solo con autorización del usuario.**
 
 ## Cuándo DETENERSE y preguntar (resumen)
 
 - Falta un objeto de `03`.
 - Un valor de gameplay no está en ninguna config (radios, distancias, balance).
 - Hay ambigüedad entre la orden original y la versión final (migración, nivel 0 o 1, GUI de planta, botón PLOT, `ParcelGameplayService`).
-- Antes de cualquier borrado o de activar la migración sobre datos reales.
+- Antes de cualquier borrado, de activar la migración sobre datos reales o de publicar.
 - Si la auditoría encuentra una implementación distinta de la documentada → reportarla y preguntar cuál prevalece.

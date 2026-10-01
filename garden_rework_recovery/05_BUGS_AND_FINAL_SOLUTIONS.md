@@ -70,7 +70,8 @@
 
 ## B13 — Migración nunca probada con datos reales
 - El DEV no tenía datos con formato de parcelas, así que la migración final **no se probó**.
-- **Recomendación final del agente:** crear una planta "vieja" falsa en los datos del DEV y verificar que llega al inventario **antes** de publicar.
+- **Recomendación final del agente:** verificar con datos de formato viejo **antes** de publicar.
+- **Ahora (juego principal):** los datos viejos reales existen. La prueba se hace en la Sección 12 con la cuenta del usuario, tras su confirmación. Antes de activarla, revisar el código de la migración con una entrada real leída (solo lectura) del perfil.
 
 ---
 

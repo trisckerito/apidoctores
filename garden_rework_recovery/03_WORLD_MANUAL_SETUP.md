@@ -10,6 +10,29 @@
 
 ---
 
+## 0. CHECKLIST DE INICIO (presentar al usuario ANTES de tocar nada)
+
+> La nueva ventana debe mostrar esta lista **tal cual** y preguntar: *"¿Ya hiciste esto en el juego principal?"*.
+> Para cada punto, recordar **cómo lo hizo o lo describió el usuario** en el desarrollo anterior (columna "Cómo se hizo antes").
+> Si el usuario no recuerda un detalle marcado UNKNOWN → preguntarle si la copia DEV sigue existiendo para **leer allí el objeto** o **copiarlo** al principal.
+
+| # | Tu parte en el mapa | Cómo se hizo antes (según el historial) | Qué verifica la ventana |
+|---|---|---|---|
+| 1 | **Respaldo del juego principal** | — (nuevo, por trabajar en el principal) | Que el usuario confirme que hay una versión guardada o publicada de respaldo |
+| 2 | **`GardenFloor`** en cada jardín | En el DEV existía un Part único `GardenFloor` con attribute `GardenId`. **Tú lo subiste de altura** respecto a las parcelas ("cuando subiste el suelo"). No consta si lo creaste tú o el agente, ni su tamaño, material o posición | Part, `Anchored`, `CanCollide`, `CanQuery`, `GardenId` = `GardenID` del jardín, que cubra el área de plantado |
+| 3 | **Cartel `GardenLevel`** | Tus palabras: *"el cartel ya lo cree, lo cree en Garden_001, dentro hay un model GardenLevel y tiene una surfacegui en una cara"* | `Model` `GardenLevel` dentro del jardín, con `SurfaceGui` en una cara de un Part |
+| 4 | **Prompt de resonancia del cartel** | Tus palabras: *"va a haber un attachment dentro de un part del model GardenLevel que se llama ProximityPrompt"*. Ambiguo: ¿el Attachment se llama "ProximityPrompt", o es un Attachment con un ProximityPrompt dentro? | Preguntar la variante y verificar que existe |
+| 5 | **Soportes de huevos (carpeta `Eggs`)** | En el DEV cada jardín tenía una carpeta `Eggs`, y el sistema de huevos colocaba los huevos "en soportes" conservando la incubación. **El historial que se analizó NO incluye cómo creaste los soportes** (cantidad, nombres, tipo de objeto, attributes, ubicación). **UNKNOWN** | Pedir al usuario que describa cómo los creó, o leerlos en la copia DEV. No inventarlos |
+| 6 | **Carpeta `Sprinklers`** | Existía en cada jardín del DEV. No consta si la creaste tú ni su contenido. **UNKNOWN** | Igual que el punto 5 |
+| 7 | **Jardines del juego principal** | En el DEV **borraste `Garden_002`…`Garden_008`** para luego **clonar `Garden_001`** ya terminado. En el principal siguen los 8 jardines con parcelas | Preguntar si repite la estrategia (dejar `Garden_001`, terminarlo y clonarlo al final) o adapta cada jardín |
+| 8 | **IDs de los clones** | Instrucción del agente: renombrar `Garden_002`, `Garden_003`…; cambiar `GardenID` en el modelo y `GardenId` en su `GardenFloor` a 2, 3… (al clonar, todos heredan 1) | IDs únicos y coincidentes (se verifica al final) |
+| 9 | **Max Players** | Pregunta tuya: con 6 bases entran 6 jugadores. Respuesta: sí, poniendo Max Players = número de jardines (Game Settings → Places) | Valor = número de jardines (se verifica al final) |
+| 10 | **API Services en Studio** | Para probar la migración con datos reales: Game Settings → Security → *Enable Studio Access to API Services*, y salir del juego publicado con tu cuenta | Preguntar si lo desactiva mientras se desarrolla |
+
+> Los puntos 7 a 9 se hacen **al final** (tras la limpieza), pero se mencionan al inicio para que el usuario sepa lo que vendrá.
+
+---
+
 ## 1. Qué consta como manual en el historial
 
 | # | Objeto | ¿Manual? | Evidencia |

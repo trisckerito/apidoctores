@@ -11,8 +11,11 @@
 
 ---
 
-## S0 — Auditoría
-- [ ] Place destino identificado y confirmado por el usuario.
+## S0 — Arranque
+- [ ] Studio abierto = juego principal `85407374189603`.
+- [ ] Checklist de `03` §0 presentado y respondido por el usuario.
+- [ ] Respaldo del place confirmado.
+- [ ] Objetos manuales verificados con el MCP (o instrucciones dadas).
 - [ ] Tabla de `01` §4 rellenada con evidencia.
 - [ ] Lista de UNKNOWN resueltos y abiertos entregada.
 - [ ] **Ningún cambio en el proyecto.**
@@ -77,7 +80,8 @@
 - [ ] Persistencia: rejoin conserva nivel, XP y resonancia.
 
 ## S9 — Migración
-- [ ] `GardenMigration` es un ModuleScript con `ENABLED = true`.
+- [ ] `GardenMigration` es un ModuleScript con `ENABLED = false` hasta S12.
+- [ ] Desactivada: las entradas viejas se ignoran y **no se borran**.
 - [ ] Se llama desde `PlantGrowthSystem.Init` **antes** de `restorePlants`. No es un Script en `PlayerAdded`.
 - [ ] Planta vieja madura y extraíble → `Plant` item con su tamaño, variante y mejoras.
 - [ ] Planta vieja en crecimiento o no extraíble → semilla correcta (no se pierde: B1).
@@ -103,8 +107,10 @@
 - [ ] Con 2+ jugadores: cada uno recibe su jardín y planta solo en el suyo.
 - [ ] Valores de prueba revisados (MaxLevel, tiempos de crecimiento, Sweet Egg).
 
-## S12 — Prueba con datos reales
+## S12 — Activación y prueba con datos reales
 - [ ] El usuario confirmó los riesgos por escrito.
+- [ ] `ENABLED = true` solo después de esa confirmación.
+- [ ] No se publicó sin autorización.
 - [ ] API Services activado. Sin sesión abierta en el juego publicado.
 - [ ] Las plantas viejas llegan al inventario según las reglas.
 - [ ] Flag `gardenReworkMigrated` presente.

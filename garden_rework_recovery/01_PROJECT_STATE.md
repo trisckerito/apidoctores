@@ -5,6 +5,8 @@
 Este paquete se generó **sin acceso a Roblox Studio**. Solo se contaba con el historial de la conversación, y **no se pudo comparar con el proyecto actual**.
 Por eso la tabla de §4 ("qué sobrevivió / qué se perdió") la debe **rellenar la nueva ventana en la Sección 0** (auditoría de solo lectura), usando la lista de §3 como referencia.
 
+> **Destino actual: JUEGO PRINCIPAL** (`85407374189603`). El estado final de §2 se alcanzó en la **copia DEV**. Lo esperable es que el juego principal esté todavía en el **estado pre-rework** (parcelas, `PlotSystem`, `PlotPresenceService`…). La tabla de §4 sirve para confirmarlo y para detectar si algo del rework ya fue portado.
+
 ---
 
 ## 2. Estado final alcanzado en el desarrollo original (DEV `86748110736040`)
@@ -95,7 +97,8 @@ La nueva ventana debe buscar cada elemento (solo lectura) y clasificarlo.
 
 | Elemento | Sobrevivió / Parcial / Perdido / Versión antigua / No determinable | Evidencia |
 |---|---|---|
-| Place DEV `86748110736040` accesible | | |
+| Juego principal abierto en Studio (`85407374189603`) | | |
+| Copia DEV `86748110736040` aún disponible (para copiar desde ahí) | | |
 | `GardenFloor` | | |
 | `GardenLevel` (modelo manual) | | |
 | `Eggs` / `Sprinklers` (carpetas) | | |
