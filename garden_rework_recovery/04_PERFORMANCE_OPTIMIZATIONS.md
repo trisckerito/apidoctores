@@ -71,3 +71,15 @@
 
 ### Propiedades físicas
 `CanQuery` / `CanTouch` / `CanCollide` / `Anchored` de objetos concretos: solo constan las de `GardenFloor` (`Anchored = true`, `CanCollide = true`; `CanQuery = true` inferido). Cualquier otra optimización de propiedades: **UNKNOWN**, no aplicar sin evidencia.
+
+---
+
+## P10 — Optimizaciones FUERA del rework (mapa, iluminación, clima) — UNKNOWN / REQUIERE VERIFICACIÓN
+
+- **Qué se sabe** [CONFIRMADO por el usuario, sin detalle]: durante el desarrollo se hicieron optimizaciones de lag fuera del alcance del rework. Por ejemplo, Parts con `CastShadow`, `CanQuery`, etc., y ajustes en sistemas de clima.
+- **Qué NO se sabe:** qué objetos exactos, qué propiedades, qué valores, si fueron manuales o por script, y en qué sistemas de clima.
+- **Acción obligatoria de la nueva ventana:**
+  1. En el arranque (checklist `03` §0), **preguntar al usuario** por estas optimizaciones.
+  2. Si la copia DEV (`86748110736040`) sigue existiendo → comparar (solo lectura) las propiedades de rendimiento (`CastShadow`, `CanQuery`, `CanTouch`, `CanCollide`, `Anchored`, iluminación, `Lighting`/clima) entre el DEV y el principal, y presentar las diferencias al usuario **antes** de aplicar nada.
+  3. **No aplicar optimizaciones masivas por cuenta propia** (cambiar `CastShadow`/`CanQuery` en masa puede romper raycasts, el plantado o la estética).
+- **Verificar:** lista de cambios aprobada por el usuario y aplicada. Raycast de plantado y tools sigue funcionando.

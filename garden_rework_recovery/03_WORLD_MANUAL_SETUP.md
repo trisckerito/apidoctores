@@ -27,6 +27,7 @@
 | 7 | **Jardines del juego principal** | En el DEV **borraste `Garden_002`…`Garden_008`** para luego **clonar `Garden_001`** ya terminado. En el principal siguen los 8 jardines con parcelas | Preguntar si repite la estrategia (dejar `Garden_001`, terminarlo y clonarlo al final) o adapta cada jardín |
 | 8 | **IDs de los clones** | Instrucción del agente: renombrar `Garden_002`, `Garden_003`…; cambiar `GardenID` en el modelo y `GardenId` en su `GardenFloor` a 2, 3… (al clonar, todos heredan 1) | IDs únicos y coincidentes (se verifica al final) |
 | 9 | **Max Players** | Pregunta tuya: con 6 bases entran 6 jugadores. Respuesta: sí, poniendo Max Players = número de jardines (Game Settings → Places) | Valor = número de jardines (se verifica al final) |
+| 11 | **Optimizaciones de lag fuera del rework** (`CastShadow`, `CanQuery`, clima, etc.) | Se hicieron durante el desarrollo, pero el historial analizado no tiene el detalle. Ver `04` P10 | Preguntar qué se cambió, o compararlo con la copia DEV si existe |
 | 10 | **API Services en Studio** | Para probar la migración con datos reales: Game Settings → Security → *Enable Studio Access to API Services*, y salir del juego publicado con tu cuenta | Preguntar si lo desactiva mientras se desarrolla |
 
 > Los puntos 7 a 9 se hacen **al final** (tras la limpieza), pero se mencionan al inicio para que el usuario sepa lo que vendrá.
